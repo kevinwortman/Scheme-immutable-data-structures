@@ -1,3 +1,13 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; immutable-structures-test.scm
+;;;;
+;;;; See the file README for general remarks and LICENSE for license
+;;;; information.
+;;;;
+;;;; This source file contains unit tests for all the procedures
+;;;; defined in immutable-structures-impl.scm. It depends on that
+;;;; file's dependencies, and also (chibi test).
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (import (chibi test)
 	(scheme base)
@@ -662,4 +672,3 @@
 
 (test 2 (- 5 3))
 (test -2 ((flip -) 5 3))
-

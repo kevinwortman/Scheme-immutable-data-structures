@@ -1,3 +1,13 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; immutable-structures-impl.scm
+;;;;
+;;;; See the file README for general remarks and LICENSE for license
+;;;; information.
+;;;;
+;;;; This source file contains the implementation of all exported
+;;;; immutable-structures procedures, and some non-exported helper
+;;;; procedures. It depends only on R7RS-small and SRFI 1.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (import (scheme base)
 	(scheme case-lambda)

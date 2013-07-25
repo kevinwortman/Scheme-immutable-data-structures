@@ -1,11 +1,18 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; immutable-structures-benchmark.scm
+;;;;
+;;;; See the file README for general remarks and LICENSE for license
+;;;; information.
+;;;;
+;;;; This is a Scheme program that imports immutable-structures and
+;;;; performs some crude benchmarks.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (import (scheme base)
 	(scheme time)
 	(scheme write)
 	(srfi 69)
 	(immutable-structures))
-
-;(load "immutable-structures-impl.scm")
 
 (define (time-trial message thunk)
   (let ((start (current-jiffy)))
