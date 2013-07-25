@@ -1,0 +1,15 @@
+The following is output produced by immutable-structures-benchmark.scm. Environment:
+- Chibi-Scheme circa 0.6.1
+- Intel Core i7 2.4 GHz laptop
+- Debian Wheezy
+
+---
+
+O(n): insert 200,000 elements into a hash table... 0.378 seconds
+O(n): build an iset from an ordered list of 200,000 elements... 10.17 seconds
+O(n log n): insert 200,000 elements into an iset... 32.349 seconds
+O(n): query hash table 200,000 times... 0.194 seconds
+O(n log n): query iset 200,000 times... 2.449 seconds
+
+Note: (log 200000 2) is 17.6096404744368
+

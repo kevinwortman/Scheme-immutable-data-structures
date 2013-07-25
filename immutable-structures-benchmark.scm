@@ -9,6 +9,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (import (scheme base)
+	(scheme inexact)
 	(scheme time)
 	(scheme write)
 	(srfi 69)
@@ -25,55 +26,49 @@
       (display " seconds")
       (newline))))
 
-(define *big-ordered-list* (iota (* 100 1000)))
+(define *N* (* 200 1000))
+(define *N:string* "200,000")
 
-(define *big-hash-table* (make-hash-table))
-(time-trial "hash table mass insert"
+(define *large-list* (iota *N*))
+
+(define *large-hash* #f)
+(time-trial (string-append "O(n): insert " *N:string* " elements into a hash table...")
+	    (lambda ()
+	      (set! *large-hash* (make-hash-table))
+	      (for-each (lambda (x)
+			  (hash-table-set! *large-hash* x #f))
+			  *large-list*)))
+
+(define *large-iset* #f)
+(time-trial (string-append "O(n): build an iset from an ordered list of "
+			   *N:string*
+			   " elements...")
+	    (lambda ()
+	      (set! *large-iset* (ordered-list->iset < *large-list*))))
+
+(time-trial (string-append "O(n log n): insert " *N:string* " elements into an iset...")
+	    (lambda ()
+	      (fold (lambda (x iset)
+		      (iset-include iset x))
+		    (iset <)
+		    *large-list*)))
+
+(time-trial (string-append "O(n): query hash table " *N:string* " times...")
 	    (lambda ()
 	      (for-each (lambda (x)
-			  (hash-table-set! *big-hash-table* x #f))
-			  *big-ordered-list*)))
+			  (hash-table-ref *large-hash* x))
+			*large-list*)))
 
-(define *big-iset* #f)
-(time-trial "iset mass insert"
+(time-trial (string-append "O(n log n): query iset " *N:string* " times...")
 	    (lambda ()
-	      (set! *big-iset*
-		    (ordered-list->iset < *big-ordered-list*))))
+	      (for-each (lambda (x)
+			  (iset-find *large-iset* x (lambda () #f)))
+			*large-list*)))
 
-(define (benchmark first-message
-		   first-proc
-		   first-base
-		   second-message
-		   second-proc
-		   second-base
-		   list)
-  (define (trial message proc base)
-    (time-trial message
-		(lambda ()
-		  (fold proc base list))))
-
-  (trial first-message first-proc first-base)
-  (trial second-message second-proc second-base))
-
-(benchmark "hash-table-exists?"
-	   (lambda (x unused)
-	     (hash-table-exists? *big-hash-table* x))
-	   #f
-	   "iset-member?"
-	   (lambda (x unused)
-	     (iset-member? *big-iset* x))
-	   #f
-	   *big-ordered-list*)
-
-#|
-(benchmark "hash table insertion"
-	   (lambda (x hash)
-	     (hash-table-set! hash x #f)
-	     hash)
-	   (make-hash-table)
-	   "iset insertion"
-	   (lambda (x set)
-	     (iset-include set x))
-	   (iset <)
-	   *big-ordered-list*)
-|#
+(newline)
+(display (string-append "Note: (log "
+			(number->string *N*)
+			" 2) is "
+			(number->string (log *N* 2))))
+(newline)
+(newline)	 
