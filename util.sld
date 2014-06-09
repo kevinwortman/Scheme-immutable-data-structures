@@ -10,7 +10,7 @@
   (export
    define-syntax-rule
    define-singleton
-   flip identity constant
+   flip identity constant-thunk
    add1 sub1
    select-left select-right
    sort/distinct
@@ -37,8 +37,8 @@
     (define (identity x)
       x)
 
-    (define (constant x)
-      (lambda args
+    (define (constant-thunk x)
+      (lambda ()
 	x))
 
     (define add1 (cute + <> 1))
@@ -72,5 +72,11 @@
 	    (unless (= j i)
               (vector-set! v i (vector-ref v j)))
 	    (vector-set! v j i)))))
+
+    (define (length-at-least? lst k)
+      (cond
+       ((<= k 0)    #true)
+       ((null? lst) #false)
+       (else        (length-at-least? (cdr lst) (sub1 k)))))
 
     ))
