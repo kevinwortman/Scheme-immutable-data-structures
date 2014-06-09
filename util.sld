@@ -7,16 +7,17 @@
    (srfi 26)
    (srfi 27)
    (srfi 95))
+
   (export
    define-syntax-rule
    define-singleton
    flip identity constant-thunk
    add1 sub1
    select-left select-right
-   sort/distinct
-   random-permutation)
+   random-permutation
+   length-at-least?)
+
   (begin
-    
     (define-syntax define-syntax-rule
       (syntax-rules ()
 	((define-syntax-rule (NAME PATTERN ...) BODY)
@@ -46,20 +47,6 @@
 
     (define (select-left left right) left)
     (define (select-right left right) right)
-
-    (define (sort/distinct lst comparator selector)
-      (let loop ((sorted (sort lst (make> comparator)))
-		 (distinct '()))
-	(if (null? sorted)
-	    distinct
-	    (let*-values (((first) (car sorted))
-			  ((duplicates rest) (span! (cute =? comparator <> first)
-						    (cdr sorted))))
-	      (loop rest
-		    (cons (if (null? duplicates)
-			      first
-			      (fold selector first duplicates))
-			  distinct))))))
 
     (define (random-permutation random-source n)
       ;; inside-out Fisher-Yates shuffle

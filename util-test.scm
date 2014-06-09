@@ -41,12 +41,10 @@
 (test 'symbol (identity 'symbol))
 (test (iota 16) (map identity (iota 16)))
 
-;; constant
-(let ((seven (constant 7)))
+;; constant-thunk
+(let ((seven (constant-thunk 7)))
   (test 7 (seven))
-  (test 7 (seven))
-  (test 7 (seven 0))
-  (test 7 (seven 'a 'b 'c)))
+  (test 7 (seven)))
 
 ;; add1, sub1
 (test 1 (add1 0))
@@ -57,18 +55,6 @@
 ;; select-left, select-right
 (test 'a (select-left 'a 'b))
 (test 'b (select-right 'a 'b))
-
-;; sort/distinct
-(let ((s/d (cute sort/distinct <> integer-comparator (lambda (old new) old))))
-  (test '() (s/d '()))
-  (test '(1) (s/d '(1)))
-  (test '(1 2) (s/d '(1 2)))
-  (test '(1 2) (s/d '(2 1)))
-  (test '(1 2) (s/d '(1 2 1 1 1)))
-  (test '(1 2) (s/d '(2 1 2 2 2)))
-  (test '(1 2) (s/d '(2 1 2 1 2 1)))
-  (test '(1 2 3 4 5)
-	(s/d '(5 4 3 2 1 1 2 3 4 5 5 4 3 2 1))))
 
 ;; random-permutation
 (and-let* ((src (make-random-source))
@@ -92,3 +78,13 @@
   (test-not (equal? p0 p2))
   (test-not (equal? p1 p2))
   )
+
+;; length-at-least?
+(test #true (length-at-least? '(1 2 3) -1))
+(test #true (length-at-least? '(1 2 3) 0))
+(test #true (length-at-least? '(1 2 3) 1))
+(test #true (length-at-least? '(1 2 3) 2))
+(test #true (length-at-least? '(1 2 3) 3))
+(test #false (length-at-least? '(1 2 3) 4))
+(test #true (length-at-least? '() 0))
+
