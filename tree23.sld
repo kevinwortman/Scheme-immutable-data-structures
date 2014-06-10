@@ -712,7 +712,7 @@
     ;; effect otherwise. This is intended for debugging and testing
     ;; and should not be used in production code. O(n^2) time.
     (define (tree23-validate comparator tree)
-      (define pass (constant #f))
+      (define pass (constant-thunk #f))
 
       (define (assert-in-order a b)
 	(unless (<? comparator a b)

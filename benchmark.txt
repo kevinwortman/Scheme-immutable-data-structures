@@ -1,3 +1,18 @@
+Timing for tree23:
+
+All trials for n = 200000
+build from ordered list: 2.25 seconds
+insert: 30.11 seconds
+delete: 43.099 seconds
+filter: 2.043 seconds
+fold: 1.57 seconds
+map: 47.667 seconds
+map/nondecreasing: 2.205 seconds
+convert to list: 0.84 seconds
+iterate: 0.975 seconds
+
+---
+
 The following is output produced by immutable-structures-benchmark.scm. Environment:
 - Chibi-Scheme circa 0.6.1
 - Intel Core i7 2.4 GHz laptop
