@@ -3,6 +3,8 @@
   (import
    (comparators)
    (scheme base)
+   (scheme time)
+   (scheme write)
    (srfi 1)
    (srfi 26)
    (srfi 27)
@@ -15,7 +17,8 @@
    add1 sub1
    select-left select-right
    random-permutation
-   length-at-least?)
+   length-at-least?
+   timer)
 
   (begin
     (define-syntax define-syntax-rule
@@ -65,5 +68,14 @@
        ((<= k 0)    #true)
        ((null? lst) #false)
        (else        (length-at-least? (cdr lst) (sub1 k)))))
+
+  (define-syntax-rule (timer message body ...)
+    (let ((start (current-jiffy)))
+      (display message)
+      (begin body ...)
+      (let* ((end (current-jiffy))
+	     (elapsed (inexact (/ (- end start)
+				  (jiffies-per-second)))))
+	(display ": ") (display elapsed) (display " seconds") (newline))))
 
     ))

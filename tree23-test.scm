@@ -5,7 +5,6 @@
  (chibi test)
  (comparators)
  (scheme base)
- (scheme time)
  (scheme write)
  (srfi 1)
  (srfi 26)
@@ -18,7 +17,7 @@
 (define thorough #true)
 
 ;; Change to #false if you want no unit tests, benchmark only.
-(define do-tests #false)
+(define do-tests #true)
 
 (let-values (((small-n medium-n large-n)
 	      (if (not thorough)
@@ -380,14 +379,6 @@
 	) ; end of tests
 
   (display "efficiency gauntlet\n")
-  (define-syntax-rule (timer message body ...)
-    (let ((start (current-jiffy)))
-      (display message)
-      (begin body ...)
-      (let* ((end (current-jiffy))
-	     (elapsed (inexact (/ (- end start)
-				  (jiffies-per-second)))))
-	(display ": ") (display elapsed) (display " seconds") (newline))))
 
   (let ((sorted (iota large-n))
 	(unsorted (random-permutation src large-n)))
