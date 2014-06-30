@@ -16,6 +16,7 @@
    flip identity constant-thunk
    add1 sub1
    random-permutation
+   pseudorandom-permutations
    length-at-least?
    timer
    powerset
@@ -60,6 +61,12 @@
 	    (unless (= j i)
               (vector-set! v i (vector-ref v j)))
 	    (vector-set! v j i)))))
+
+    (define (pseudorandom-permutations count length-of-each seed)
+      (let ((src (make-random-source)))
+	(random-source-pseudo-randomize! src 0 seed)
+	(list-tabulate count (lambda (i)
+			       (random-permutation src length-of-each)))))
 
     (define (length-at-least? lst k)
       (cond
