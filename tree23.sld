@@ -16,7 +16,7 @@
 ;;      http://dl.acm.org/citation.cfm?id=1735547
 ;;
 ;; The library depends on R7RS-small, SRFIs 1, 26, and 114, and the
-;; util library in this repository.
+;; selector and util libraries in this repository.
 ;;
 ;; See the file README for general remarks and LICENSE for license
 ;; information.
@@ -26,6 +26,7 @@
    (comparators)
    (scheme base)
    (scheme write)
+   (selector)
    (srfi 1)
    (srfi 26)
    (util))
@@ -250,7 +251,7 @@
     (define (tree23-insert comparator selector tree q)
       ;; aliases
       (define compare (cute comparator-compare comparator q <>))
-      (define select (cute selector <> q))
+      (define select (cute selector-select selector <> q))
 
       ;; We do this with recursion and continuation passing. down must
       ;; insert q into tree, then call either

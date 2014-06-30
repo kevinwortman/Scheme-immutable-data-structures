@@ -6,6 +6,7 @@
  (comparators)
  (scheme base)
  (scheme write)
+ (selector)
  (srfi 1)
  (srfi 26)
  (srfi 27)
@@ -26,7 +27,7 @@
 
 (define cmp number-comparator)
 (define search (cute tree23-search cmp identity (constant-thunk #f) <> <>))
-(define insert (cute tree23-insert cmp select-left <> <>))
+(define insert (cute tree23-insert cmp left-selector <> <>))
 (define delete (cute tree23-delete cmp (cute error "invalid state") <> <>))
 (define validate (cute tree23-validate cmp <>))
 (define (contains? tree q)
@@ -219,13 +220,13 @@
 	  (tree23-fold + 7 digits))
 
     ;; tree23-map
-    (test-assert (tree23-empty? (tree23-map add1 cmp select-left empty)))
+    (test-assert (tree23-empty? (tree23-map add1 cmp left-selector empty)))
     ;; add1 happens to be nondecreasing
-    (let ((tree (tree23-map add1 cmp select-left digits)))
+    (let ((tree (tree23-map add1 cmp left-selector digits)))
       (validate tree)
       (test '(1 2 3 4 5 6 7 8 9 10) (tree23->ordered-list tree)))
     ;; negation is non-nondecreasing
-    (let ((tree (tree23-map - cmp select-left digits)))
+    (let ((tree (tree23-map - cmp left-selector digits)))
       (validate tree)
       (test '(-9 -8 -7 -6 -5 -4 -3 -2 -1 0) (tree23->ordered-list tree)))
 
@@ -247,14 +248,14 @@
       (test list (tree23->ordered-list tree)))
 
     ;; list->tree23
-    (test-assert (tree23-empty? (list->tree23 cmp select-left '())))
+    (test-assert (tree23-empty? (list->tree23 cmp left-selector '())))
     (test '(1 2 3)
 	  (tree23->ordered-list
-	   (list->tree23 cmp select-left '(2 1 3))))
+	   (list->tree23 cmp left-selector '(2 1 3))))
     ;; duplicates
     (test '(1 2 3)
 	  (tree23->ordered-list
-	   (list->tree23 cmp select-left '(1 2 3 3 1 2 1 3 2 3 1))))
+	   (list->tree23 cmp left-selector '(1 2 3 3 1 2 1 3 2 3 1))))
 
     (display "range query\n")
 
@@ -313,7 +314,7 @@
 	      ;; map
 	      (test (map add1 sorted)
 		    (tree23->ordered-list
-		     (tree23-map add1 cmp select-left tree)))
+		     (tree23-map add1 cmp left-selector tree)))
 	      (test (map add1 sorted)
 		    (tree23->ordered-list
 		     (tree23-map/nondecreasing add1 tree)))
@@ -325,10 +326,10 @@
 		     (ordered-list->tree23 sorted)))
 	      (test sorted
 		    (tree23->ordered-list
-		     (list->tree23 cmp select-left sorted)))
+		     (list->tree23 cmp left-selector sorted)))
 	      (test sorted
 		    (tree23->ordered-list
-		     (list->tree23 cmp select-left
+		     (list->tree23 cmp left-selector
 				   (append perm
 					   sorted
 					   (random-permutation src n)
@@ -381,12 +382,12 @@
   (display "All trials for n = ") (display (number->string large-n))
   (newline)
   (timer "build from ordered list" (ordered-list->tree23 sorted))
-  (timer "insert" (list->tree23 cmp select-left unsorted))
+  (timer "insert" (list->tree23 cmp left-selector unsorted))
   (let ((tree (ordered-list->tree23 sorted)))
     (timer "delete" (fold (flip delete) tree unsorted))
     (timer "filter" (tree23-filter even? tree))
     (timer "fold" (tree23-fold + 0 tree))
-    (timer "map" (tree23-map add1 cmp select-left tree))
+    (timer "map" (tree23-map add1 cmp left-selector tree))
     (timer "map/nondecreasing" (tree23-map/nondecreasing add1 tree))
     (timer "convert to list" (tree23->ordered-list tree))
     (timer "iterate"

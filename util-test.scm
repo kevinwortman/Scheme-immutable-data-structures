@@ -101,3 +101,9 @@
 		      (1) (1 2) (1 2 3) (1 3)
 		      (2) (2 3)
 		      (3))))
+
+;; boolean
+(test #f (boolean #f))
+(test #t (boolean #t))
+(test #t (boolean 0))
+(test #t (boolean '()))

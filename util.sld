@@ -15,11 +15,11 @@
    define-singleton
    flip identity constant-thunk
    add1 sub1
-   select-left select-right
    random-permutation
    length-at-least?
    timer
-   powerset)
+   powerset
+   boolean)
 
   (begin
     (define-syntax define-syntax-rule
@@ -48,9 +48,6 @@
 
     (define add1 (cute + <> 1))
     (define sub1 (cute - <> 1))
-
-    (define (select-left left right) left)
-    (define (select-right left right) right)
 
     (define (random-permutation random-source n)
       ;; inside-out Fisher-Yates shuffle
@@ -85,4 +82,8 @@
 		    (map (cute cons i <>) subsets)))
 	  '(())
 	  (iota n)))
+
+  (define (boolean x)
+    (if x #t #f))
+
     ))
