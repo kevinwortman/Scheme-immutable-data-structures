@@ -72,13 +72,12 @@
 	  (finger-tree-pop-back back-tree))))
 
 ;; finger-tree-append
-;; TODO failing
 (let loop ((i 0)
-	   (lin-list five-list)
-	   (exp-list five-list)
+	   (lin-list five-list) ; grows linearly
+	   (exp-list five-list) ; grows exponentially
 	   (lin-tree five)
 	   (exp-tree five))
-  (unless (= i 2)
+  (when (<= i 10)
     (test lin-list (finger-tree->list lin-tree))
     (test exp-list (finger-tree->list exp-tree))
     (loop (add1 i)

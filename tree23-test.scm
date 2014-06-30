@@ -20,7 +20,7 @@
 (define do-tests #true)
 
 (define thousand (cute * 1000 <>))
-(define small-n 100)
+(define small-n (if thorough 100 10))
 (define medium-n (thousand (if thorough 10 1)))
 (define large-n (thousand (if thorough 200 10)))
 
@@ -107,9 +107,9 @@
     (display "delete\n")
 
     ;; tree23-delete
-					; try to delete missing element
+    ;; try to delete missing element
     (test 'missing (tree23-delete cmp (constant-thunk 'missing) digits 5.5))
-					; straightforward deletion, one at a time
+    ;; straightforward deletion, one at a time
     (let ((tree (delete digits 3)))
       (validate tree)
       (test '(0 1 2 4 5 6 7 8 9) (tree23->ordered-list tree))
@@ -149,15 +149,15 @@
       (set! tree (delete tree 1))
       (validate tree)
       (test '() (tree23->ordered-list tree)))
-					; try other deletion orders
-    #|
+
+    ;; try other deletion orders
     (loop ((for i (up-from 0 (to small-n))))
-    (fold (lambda (q tree)
-    (validate tree)
-    (delete tree q))
-    (ordered-list->tree23 (iota small-n))
-    (random-permutation src small-n)))
-    |#
+      (fold (lambda (q tree)
+	      (validate tree)
+	      (delete tree q))
+	    (ordered-list->tree23 (iota small-n))
+	    (random-permutation src small-n)))
+
     (display "iterator\n")
 
     ;; make-tree23-iter
