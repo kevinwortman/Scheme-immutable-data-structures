@@ -58,7 +58,7 @@
 
 ;; random-permutation
 (and-let* ((src (make-random-source))
-	   ((random-source-pseudo-randomize! src 0))
+	   ((random-source-pseudo-randomize! src 0 0))
 	   (p0 (random-permutation src 10))
 	   (p1 (random-permutation src 10))
 	   (p2 (random-permutation src 10)))
@@ -87,3 +87,17 @@
 (test #true (length-at-least? '(1 2 3) 3))
 (test #false (length-at-least? '(1 2 3) 4))
 (test #true (length-at-least? '() 0))
+
+;; powerset
+(test '(()) (powerset 0))
+(test-assert (lset= (powerset 1)
+		    '(() (0))))
+(test-assert (lset= (powerset 2)
+		    '(() (0) (0 1) (1))))
+(test-assert (lset= (powerset 3)
+		    '(() (0) (0 1) (0 1 2) (1) (1 2) (2))))
+(test-assert (lset= (powerset 4)
+		    '(() (0) (0 1) (0 1 2) (0 1 2 3) (0 2) (0 2 3) (0 3)
+		      (1) (1 2) (1 2 3) (1 3)
+		      (2) (2 3)
+		      (3))))

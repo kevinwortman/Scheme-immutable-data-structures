@@ -18,7 +18,8 @@
    select-left select-right
    random-permutation
    length-at-least?
-   timer)
+   timer
+   powerset)
 
   (begin
     (define-syntax define-syntax-rule
@@ -78,4 +79,10 @@
 				  (jiffies-per-second)))))
 	(display ": ") (display elapsed) (display " seconds") (newline))))
 
+  (define (powerset n)
+    (fold (lambda (i subsets)
+	    (append subsets
+		    (map (cute cons i <>) subsets)))
+	  '(())
+	  (iota n)))
     ))
