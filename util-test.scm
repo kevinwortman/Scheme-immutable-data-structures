@@ -52,10 +52,6 @@
 (test 0 (sub1 1))
 (test 1 (sub1 2))
 
-;; select-left, select-right
-(test 'a (select-left 'a 'b))
-(test 'b (select-right 'a 'b))
-
 ;; random-permutation
 (and-let* ((src (make-random-source))
 	   ((random-source-pseudo-randomize! src 0 0))
@@ -78,6 +74,14 @@
   (test-not (equal? p0 p2))
   (test-not (equal? p1 p2))
   )
+
+;; pseudorandom-permutations
+(test '()
+      (pseudorandom-permutations 0 3 0))
+(test '((2 5 1 6 7 0 4 3))
+      (pseudorandom-permutations 1 8 0))
+(test '((3 4 5 1 2 7 0 6) (4 5 2 3 0 1 7 6) (2 5 1 6 7 0 4 3))
+      (pseudorandom-permutations 3 8 0))
 
 ;; length-at-least?
 (test #true (length-at-least? '(1 2 3) -1))
@@ -107,3 +111,5 @@
 (test #t (boolean #t))
 (test #t (boolean 0))
 (test #t (boolean '()))
+
+;; left-associative

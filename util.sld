@@ -93,4 +93,11 @@
   (define (boolean x)
     (if x #t #f))
 
+  ;; Takes a binary procedure and returns a procedure that takes two
+  ;; or more arguments, applying the binary operation in
+  ;; left associative order.
+  (define (left-associative binary-operation)
+    (lambda (left right . rest)
+      (fold (flip binary-operation) left (cons right rest))))
+
     ))
