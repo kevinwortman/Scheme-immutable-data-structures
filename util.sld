@@ -14,6 +14,7 @@
    define-syntax-rule
    define-singleton
    flip identity constant-thunk
+   left-associative
    add1 sub1
    random-permutation
    pseudorandom-permutations
@@ -46,6 +47,13 @@
     (define (constant-thunk x)
       (lambda ()
 	x))
+
+    ;; Takes a binary procedure and returns a procedure that takes two
+    ;; or more arguments, applying the binary operation in
+    ;; left associative order.
+    (define (left-associative binary-operation)
+      (lambda (left right . rest)
+	(fold (flip binary-operation) left (cons right rest))))
 
     (define add1 (cute + <> 1))
     (define sub1 (cute - <> 1))
@@ -93,11 +101,4 @@
   (define (boolean x)
     (if x #t #f))
 
-  ;; Takes a binary procedure and returns a procedure that takes two
-  ;; or more arguments, applying the binary operation in
-  ;; left associative order.
-  (define (left-associative binary-operation)
-    (lambda (left right . rest)
-      (fold (flip binary-operation) left (cons right rest))))
-
-    ))
+  ))

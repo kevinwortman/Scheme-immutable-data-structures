@@ -113,3 +113,7 @@
 (test #t (boolean '()))
 
 ;; left-associative
+(let ((kons (left-associative cons)))
+  (test-error (kons 1))
+  (test '(1 . 2) (kons 1 2))
+  (test '((1 . 2) . 3) (kons 1 2 3)))
