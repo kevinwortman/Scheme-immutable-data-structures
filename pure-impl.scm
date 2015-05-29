@@ -1,12 +1,16 @@
 
 (define (vector->generator vect)
-  (let ((i 0))
-    (lambda ()
-      (if (= i (vector-length vect))
-	  (eof-object)
-	  (let ((obj (vector-ref vect i)))
-	    (set! i (+ 1 i))
-	    obj)))))
+  (gmap (cute vector-ref vect <>)
+	(make-range-generator 0 (vector-length vect))))
+
+(define (reverse-vector->generator vect)
+  (let ((n (vector-length vect)))
+    (gmap (lambda (i)
+	    (vector-ref vect (- n i 1)))
+	  (make-range-generator 0 n))))
+
+(define (reverse-vector-for-each proc vect)
+  (generator-for-each proc (reverse-vector->generator vect)))
 
 (define (list->generator list)
   (let ((list list))
@@ -29,6 +33,8 @@
 
 (define (right-arg l r)
   r)
+
+(define invalid-state-error (cute error "invalid state"))
 
 (define-syntax n-ary
   (syntax-rules ()
@@ -67,6 +73,8 @@
 (define digit-ref vector-ref)
 
 (define digit->generator vector->generator)
+
+(define reverse-digit->generator reverse-vector->generator)
 
 (define (digit-left dgt)
   (digit-ref dgt 0))
@@ -137,6 +145,9 @@
 (define (digit-for-each proc dgt)
   (generator-for-each proc (digit->generator dgt)))
 
+(define (digit-for-each/reverse proc dgt)
+  (generator-for-each proc (reverse-digit->generator dgt)))
+
 (define-record-type <node2>
   (make-node2-raw x y m)
   node2?
@@ -163,15 +174,37 @@
 			(madd (mget y)
 			      (mget z)))))
 
+(define-syntax match-node
+  (syntax-rules (node2 node3)
+    ((match-node NODE
+       ((node2 X Y M)
+	NODE2-BODY)
+       ((node3 X Y Z M)
+	NODE3-BODY))
+     (if (node2? NODE)
+	 (let ((X (node2-x NODE))
+	       (Y (node2-y NODE))
+	       (M (node2-m NODE)))
+	   NODE2-BODY)
+	 (let ((X (node3-x NODE))
+	       (Y (node3-y NODE))
+	       (Z (node3-z NODE))
+	       (M (node3-m NODE)))
+	   NODE3-BODY)))))
+
 (define (node-m node)
-  (if (node2? node)
-      (node2-m node)
-      (node3-m node)))
+  (match-node node
+    ((node2 x y m)
+     m)
+    ((node3 x y z m)
+     m)))
 
 (define (node->digit node)
-  (if (node2? node)
-      (vector (node2-x node) (node2-y node))
-      (vector (node3-x node) (node3-y node) (node3-z node))))
+  (match-node node
+    ((node2 x y m)
+     (digit x y))
+    ((node3 x y z m)
+     (digit x y z))))
 
 (define-syntax match-nonempty-tree
   (syntax-rules (single deep)
@@ -581,48 +614,6 @@
 				   (else
 				    (absent/m m-suf))))))))))))))))))
 
-#|
-;; TODO implemented by SRFI 121
-(define (finger-tree-merge madd
-			   mget
-			   key
-			   key-cmp
-			   keep-unique-left
-			   keep-unique-right
-			   merge-common
-			   left
-			   right)
-  (let loop ((left left) (right right) (result *empty*))
-    (cond
-     ((empty? left)
-      (if keep-unique-right
-	  (finger-tree-append madd mget result right)
-	  result))
-     ((empty? right)
-      (if keep-unique-left
-	  (finger-tree-append madd mget result left)
-	  result))
-     (else
-      (let ((l (finger-tree-left left))
-	    (r (finger-tree-left right)))
-	(if3 (comparator-compare key-cmp (key l) (key r))
-	     (loop (finger-tree-pop-left left)
-		   right
-		   (if keep-unique-left
-		       (finger-tree-push-right madd mget result l)
-		       result))
-	     (loop (finger-tree-pop-left left)
-		   (finger-tree-pop-left right)
-		   (if merge-common
-		       (finger-tree-push-right madd mget result (merge-common l r))
-		       result))
-	     (loop left
-		   (finger-tree-pop-left right)
-		   (if keep-unique-right
-		       (finger-tree-push-right madd mget result r)
-		       result))))))))
-|#
-
 (define (generator->finger-tree madd mget gen)
   (let ((l (gen)))
     (if (eof-object? l)
@@ -630,8 +621,7 @@
 	(let ((e (gen)))
 	  (if (eof-object? e)
 	      (make-single l)
-	      (let ((buf (make-vector 3)))
-		(vector-set! buf 0 e)
+	      (let ((buf (vector e #f #f)))
 		(let loop ((k 1) (s *empty*))
 		  (let ((e (gen)))
 		    (cond
@@ -656,24 +646,48 @@
   (make-for-each-generator (lambda (proc tree)
 			     (let recurse ((proc proc) (tree tree))
 			       (match-tree tree
-                                 ((empty)
-				  #f)
-				 ((single x)
-				  (proc x))
-				 ((deep l sp r)
-				  (begin
-				    (digit-for-each proc l)
-				    (recurse (lambda (node)
-					       (if (node2? node)
-						   (begin
-						     (proc (node2-x node))
-						     (proc (node2-y node)))
-						   (begin
-						     (proc (node3-x node))
-						     (proc (node3-y node))
-						     (proc (node3-z node)))))
-					     (force sp))
-				    (digit-for-each proc r))))))
+					   ((empty)
+					    (begin))
+					   ((single x)
+					    (proc x))
+					   ((deep l sp r)
+					    (begin
+					      (vector-for-each proc l)
+					      (recurse (lambda (node)
+							 (match-node node
+								     ((node2 x y m)
+								      (begin (proc x)
+									     (proc y)))
+								     ((node3 x y z m)
+								      (begin (proc x)
+									     (proc y)
+									     (proc z)))))
+						       (force sp))
+					      (vector-for-each proc r))))))
+			   tree))
+
+(define (reverse-finger-tree->generator tree)
+  (make-for-each-generator (lambda (proc tree)
+			     (let recurse ((proc proc) (tree tree))
+			       (match-tree tree
+					   ((empty)
+					    (begin))
+					   ((single x)
+					    (proc x))
+					   ((deep l sp r)
+					    (begin
+					      (reverse-vector-for-each proc r)
+					      (recurse (lambda (node)
+							 (match-node node
+								     ((node2 x y m)
+								      (begin (proc y)
+									     (proc x)))
+								     ((node3 x y z m)
+								      (begin (proc z)
+									     (proc y)
+									     (proc x)))))
+						       (force sp))
+					      (reverse-vector-for-each proc l))))))
 			   tree))
 
 (define (list->finger-tree madd mget list)
@@ -710,169 +724,165 @@
 			(finger-tree-pop-right right)))
 	     #false))))))
 
-#|
 (define-record-type <ideque>
-  (make-ideque-raw length tree)
+  (make-ideque length tree)
   ideque?
   (length ideque-length)
   (tree ideque-tree))
 
-(define ideque-madd (constant #f))
+(define ideque-madd +)
+(define (ideque-mget obj) 1)
+(define ideque-mseed 0)
 
-(define ideque-mget (constant #f))
+(define (ideque->generator deque)
+  (finger-tree->generator (ideque-tree deque)))
 
-(define (ideque-check-length dq k)
-  (when (> k (ideque-length dq))
+(define (reverse-ideque->generator deque)
+  (reverse-finger-tree->generator (ideque-tree deque)))
+
+(define generator->ideque-finger-tree (cute generator->finger-tree ideque-madd ideque-mget <>))
+
+(define (length+generator->ideque length gen)
+  (make-ideque length (generator->ideque-finger-tree gen)))
+
+(define (generator->ideque gen)
+  (let ((tree (generator->ideque-finger-tree gen)))
+    (make-ideque (finger-tree-length tree) tree)))
+
+(define (ideque-check-length deque k)
+  (when (> k (ideque-length deque))
 	(error "ideque underflow")))
 
 (define ideque-check-nonempty (cute ideque-check-length <> 1))
 
-(define (finger-tree->ideque tree)
-  (make-ideque-raw (finger-tree-length tree) tree))
-
-(define make-ideque
-  (case-lambda
-   ((k)
-    (make-ideque k #f))
-   ((k fill)
-    (finger-tree->ideque (make-finger-tree ideque-madd ideque-mget k fill)))))
-
 (define (ideque . elements)
-  (generator->ideque (list->generator elements)))
+  (list->ideque elements))
 
-(define (ideque-empty? dq)
-  (empty? (ideque-tree dq)))
+(define (ideque-tabulate n proc)
+  (length+generator->ideque n (make-tabulation-generator n proc)))
 
-(define (ideque-front dq)
-  (ideque-check-nonempty dq)
-  (finger-tree-left (ideque-tree dq)))
+(define (ideque-unfold stop? mapper successor seed)
+  (generator->ideque (make-unfold-generator stop? mapper successor seed)))
 
-(define (ideque-back dq)
-  (ideque-check-nonempty dq)
-  (finger-tree-right (ideque-tree dq)))
+(define (ideque-unfold-right stop? mapper successor seed)
+  (ideque-reverse (ideque-unfold stop? mapper successor seed)))
 
-(define (ideque-push-front dq obj)
-  (make-ideque-raw (+ 1 (ideque-length dq))
-		   (finger-tree-push-left ideque-madd ideque-mget (ideque-tree dq) obj)))
+(define (ideque-empty? deque)
+  (zero? (ideque-length deque)))
 
-(define (ideque-push-back dq obj)
-  (make-ideque-raw (+ 1 (ideque-length dq))
-		   (finger-tree-push-right ideque-madd ideque-mget (ideque-tree dq) obj)))
+(define (ideque-front deque)
+  (ideque-check-nonempty deque)
+  (finger-tree-left (ideque-tree deque)))
 
-(define (ideque-pop-front dq)
-  (ideque-check-nonempty dq)
-  (make-ideque-raw (- (ideque-length dq) 1)
-		   (finger-tree-pop-left (ideque-tree dq))))
+(define (ideque-back deque)
+  (ideque-check-nonempty deque)
+  (finger-tree-right (ideque-tree deque)))
 
-(define (ideque-pop-back dq)
-  (ideque-check-nonempty dq)
-  (make-ideque-raw (- (ideque-length dq) 1)
-		   (finger-tree-pop-right (ideque-tree dq))))
+(define (ideque-remove-front deque)
+  (ideque-check-nonempty deque)
+  (make-ideque (- (ideque-length deque) 1)
+	       (finger-tree-pop-left (ideque-tree deque))))
 
-(define (ideque-drop-front dq k)
-  (ideque-check-length dq k)
-  (do ((tree (ideque-tree dq) (finger-tree-pop-left tree))
-       (k k (- k 1)))
-      ((zero? k)
-       (make-ideque-raw (- (ideque-length dq) k)
-			tree))))
+(define (ideque-remove-back deque)
+  (ideque-check-nonempty deque)
+  (make-ideque (- (ideque-length deque) 1)
+	       (finger-tree-pop-right (ideque-tree deque))))
 
-(define (ideque-drop-back dq k)
-  (ideque-check-length dq k)
-  (do ((tree (ideque-tree dq) (finger-tree-pop-right tree))
-       (k k (- k 1)))
-      ((zero? k)
-       (make-ideque-raw (- (ideque-length dq) k)
-			tree))))
+(define (ideque-add-front deque obj)
+  (make-ideque (+ 1 (ideque-length deque))
+	       (finger-tree-push-left ideque-madd ideque-mget (ideque-tree deque) obj)))
 
-(define (generator->ideque gen)
-  (finger-tree->ideque (generator->finger-tree ideque-madd ideque-mget gen)))
+(define (ideque-add-back deque obj)
+  (make-ideque (+ 1 (ideque-length deque))
+	       (finger-tree-push-right ideque-madd ideque-mget (ideque-tree deque) obj)))
 
-(define (ideque->generator dq)
-  (finger-tree->generator (ideque-tree dq)))
-
-(define-record-type <ivector>
-  (make-ivector-raw length tree)
-  ivector?
-  (length ivector-length)
-  (tree ivector-tree))
-
-(define ivector-madd +)
-
-(define ivector-get (constant 1))
-
-(define ivector-oob (cute error "ivector index out of bounds"))
-
-(define (ivector-check-index vect i)
-  (unless (< -1 i (ivector-length vect))
-	  (ivector-oob)))
-
-(define make-ivector
-  (case-lambda
-   ((k)
-    (make-ivector k #f))
-   ((k fill)
-    (make-ivector-raw k (make-finger-tree ivector-madd ivector-mget k fill)))))
-
-(define (ivector . elements)
-  (generator->ivector (list->generator elements)))
-
-(define (ivector-ref vect i)
-  (ivector-check-index vect i)
-  (finger-tree-split ivector-madd
-		     ivector-mget
-		     (cute = <> i)
-		     (ivector-tree vect)
-		     (lambda (pre e suf)
-		       e)
-		     ivector-oob))
-
-(define (ivector-set vect i obj)
-  (ivector-check-index vect i)
-  (finger-tree-split ivector-madd
-		     ivector-mget
-		     (cute = <> i)
-		     (ivector-tree vect)
-		     (lambda (pre e suf)
-		       (make-ivector-raw (ivector-length vect)
-					 (finger-tree-append ivector-madd
-							     ivector-mget
-							     (pre)
-							     (make-single obj)
-							     (suf))))
-		     ivector-oob))
-
-(define ivector-copy
-  (case-lambda
-   ((vect start)
-    (ivector-copy vect start (ivector-length vect)))
-   ((vect start end)
-    (unless (<= 0 start end (ivector-length vect))
-	    (error "ivector-copy: invalid range"))
-    (let ((k (- end to)))
-      (case k
-	((0)
-	 (ivector))
-	((1)
-	 (ivector (ivector-ref vect start)))
-	(else
-	 (finger-tree-split ivector-madd
-			    ivector-mget
-			    (cute = <> end)
-			    (ivector-tree vect)
+(define (ideque-split-at/thunks deque n)
+  (ideque-check-length deque n)
+  (finger-tree-scan/context ideque-madd
+			    ideque-mget
+			    (cute >= <> n)
+			    ideque-mseed
+			    (ideque-tree deque)
 			    (lambda (pre e suf)
-			      (finger-tree-split ivector-madd
-						 ivector-mget
-						 (cute = <> start)
-						 (pre)
-						 (lambda (pre e suf)
-						   (make-ivector-raw k
-								     (finger-tree-push-left ivector-madd
-											    ivector-mget
-											    (suf)
-											    e)))
-						 ivector-oob))
-			    ivector-oob)))))))
+			      (values pre
+				      (cut finger-tree-push-left ideque-madd ideque-mget (suf) e)))
+			    invalid-state-error))
+
+(define (ideque-take deque n)
+  (receive (pre suf) (ideque-split-at/thunks deque n)
+    (make-ideque n
+		 (pre))))
+
+(define (ideque-drop deque n)
+  (receive (pre suf) (ideque-split-at/thunks deque n)
+    (make-ideque (- (ideque-length deque) n)
+		 (suf))))
+
+(define (ideque-take-right deque n)
+  (ideque-drop deque (- n (ideque-length deque))))
+
+(define (ideque-drop-right deque n)
+  (ideque-take deque (- n (ideque-length deque))))
+
+(define (ideque-split-at deque n)
+  (values (ideque-take deque n)
+	  (ideque-drop deque n)))
+
+(define (ideque-append . deques)
+  (make-ideque (apply + (map ideque-length deques))
+	       (apply finger-tree-append ideque-madd ideque-mget deques)))
+
+(define (ideque-concatenate list-of-deques)
+  (length+generator->ideque (fold + 0 (map ideque-length list-of-deques))
+			    (gconcatenate (map ideque->generator list-of-deques))))
+
+(define (ideque-reverse deque)
+  (length+generator->ideque (ideque-length deque)
+			    (reverse-ideque->generator deque)))
+
+(define (ideque-count pred deque)
+  (generator-count pred (ideque->generator deque)))
+
+;; TODO ideque-zip
+
+(define (ideque-map proc deque)
+  (length+generator->ideque (ideque-length deque)
+			    (gmap proc (ideque->generator deque))))
+
+(define (ideque-for-each proc deque)
+  (generator-for-each proc (ideque->generator deque)))
+
+(define (ideque-fold proc nil deque)
+  (generator-fold proc nil (ideque->generator deque)))
+
+(define (ideque-fold-right proc nil deque)
+  (generator-fold proc nil (reverse-ideque->generator deque)))
+
+;; TODO ideque-append-map
+
+(define (ideque-filter pred deque)
+  (generator->ideque (gfilter pred (ideque->generator deque))))
+
+(define (ideque-remove pred deque)
+  (ideque-filter (lambda (obj)
+		   (not (pred obj)))
+		 deque))
+
+(define (ideque-partition pred deque)
+  (values (ideque-filter pred deque)
+	  (ideque-remove pred deque)))
+
+;; TODO searching procedures
+
+(define (list->ideque list)
+  (generator->ideque (list->generator list)))
+
+(define (ideque->list deque)
+  (generator->list (ideque->generator deque)))
+
+
+
+#|
 
 (define-record-type <iset>
   (make-iset cmp size tree)
