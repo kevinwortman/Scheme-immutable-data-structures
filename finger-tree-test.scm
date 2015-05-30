@@ -16,7 +16,7 @@
 
        (to-list finger-tree->list)
 
-       (f0 (finger-tree/empty)) ; empty
+       (f0 (finger-tree)) ; empty
        (f1 (finger-tree madd mget 1)) ; single
        (f2 (finger-tree madd mget 1 2)) ; 2-4 case
        (f3 (finger-tree madd mget 1 2 3))
@@ -28,15 +28,9 @@
        (f9 (finger-tree madd mget 1 2 3 4 5 6 7 8 9)) ; 9+ case
        (fn (list->finger-tree madd mget (iota n))))
 
-  ;; finger-tree/empty
-  (test-assert (procedure? finger-tree/empty))
-  (test-assert (finger-tree? f0))
-  (test-assert (finger-tree-empty? f0))
-  (test '() (to-list f0))
-
   ;; finger-tree
   (test-assert (procedure? finger-tree))
-  (test-assert (eqv? f0 (finger-tree madd mget))) ; equivalent to (finger-tree/empty)
+  (test-assert (eqv? f0 (finger-tree madd mget)))
   (test '(1) (to-list f1))
   (test '(1 2) (to-list f2))
   (test '(1 2 3) (to-list f3))
@@ -89,83 +83,83 @@
   (test 8 (finger-tree-length f8))
   (test 9 (finger-tree-length f9))
 
-  ;; finger-tree-left
-  (test-assert (procedure? finger-tree-left))
-  (test-error (finger-tree-left f0))
-  (test 1 (finger-tree-left f1))
-  (test 1 (finger-tree-left f2))
-  (test 1 (finger-tree-left f3))
-  (test 1 (finger-tree-left f4))
-  (test 1 (finger-tree-left f5))
-  (test 1 (finger-tree-left f6))
-  (test 1 (finger-tree-left f7))
-  (test 1 (finger-tree-left f8))
-  (test 1 (finger-tree-left f9))
+  ;; finger-tree-front
+  (test-assert (procedure? finger-tree-front))
+  (test-error (finger-tree-front f0))
+  (test 1 (finger-tree-front f1))
+  (test 1 (finger-tree-front f2))
+  (test 1 (finger-tree-front f3))
+  (test 1 (finger-tree-front f4))
+  (test 1 (finger-tree-front f5))
+  (test 1 (finger-tree-front f6))
+  (test 1 (finger-tree-front f7))
+  (test 1 (finger-tree-front f8))
+  (test 1 (finger-tree-front f9))
 
-  ;; finger-tree-right
-  (test-assert (procedure? finger-tree-right))
-  (test-error (finger-tree-right f0))
-  (test 1 (finger-tree-right f1))
-  (test 2 (finger-tree-right f2))
-  (test 3 (finger-tree-right f3))
-  (test 4 (finger-tree-right f4))
-  (test 5 (finger-tree-right f5))
-  (test 6 (finger-tree-right f6))
-  (test 7 (finger-tree-right f7))
-  (test 8 (finger-tree-right f8))
-  (test 9 (finger-tree-right f9))
+  ;; finger-tree-back
+  (test-assert (procedure? finger-tree-back))
+  (test-error (finger-tree-back f0))
+  (test 1 (finger-tree-back f1))
+  (test 2 (finger-tree-back f2))
+  (test 3 (finger-tree-back f3))
+  (test 4 (finger-tree-back f4))
+  (test 5 (finger-tree-back f5))
+  (test 6 (finger-tree-back f6))
+  (test 7 (finger-tree-back f7))
+  (test 8 (finger-tree-back f8))
+  (test 9 (finger-tree-back f9))
 
-  ;; finger-tree-push-left
-  (test-assert (procedure? finger-tree-push-left))
-  (test '(10) (to-list (finger-tree-push-left madd mget f0 10)))
-  (test '(10 1) (to-list (finger-tree-push-left madd mget f1 10)))
-  (test '(10 1 2) (to-list (finger-tree-push-left madd mget f2 10)))
-  (test '(10 1 2 3) (to-list (finger-tree-push-left madd mget f3 10)))
-  (test '(10 1 2 3 4) (to-list (finger-tree-push-left madd mget f4 10)))
-  (test '(10 1 2 3 4 5) (to-list (finger-tree-push-left madd mget f5 10)))
-  (test '(10 1 2 3 4 5 6) (to-list (finger-tree-push-left madd mget f6 10)))
-  (test '(10 1 2 3 4 5 6 7) (to-list (finger-tree-push-left madd mget f7 10)))
-  (test '(10 1 2 3 4 5 6 7 8) (to-list (finger-tree-push-left madd mget f8 10)))
-  (test '(10 1 2 3 4 5 6 7 8 9) (to-list (finger-tree-push-left madd mget f9 10)))
+  ;; finger-tree-add-front
+  (test-assert (procedure? finger-tree-add-front))
+  (test '(10) (to-list (finger-tree-add-front madd mget f0 10)))
+  (test '(10 1) (to-list (finger-tree-add-front madd mget f1 10)))
+  (test '(10 1 2) (to-list (finger-tree-add-front madd mget f2 10)))
+  (test '(10 1 2 3) (to-list (finger-tree-add-front madd mget f3 10)))
+  (test '(10 1 2 3 4) (to-list (finger-tree-add-front madd mget f4 10)))
+  (test '(10 1 2 3 4 5) (to-list (finger-tree-add-front madd mget f5 10)))
+  (test '(10 1 2 3 4 5 6) (to-list (finger-tree-add-front madd mget f6 10)))
+  (test '(10 1 2 3 4 5 6 7) (to-list (finger-tree-add-front madd mget f7 10)))
+  (test '(10 1 2 3 4 5 6 7 8) (to-list (finger-tree-add-front madd mget f8 10)))
+  (test '(10 1 2 3 4 5 6 7 8 9) (to-list (finger-tree-add-front madd mget f9 10)))
 
-  ;; finger-tree-push-right
-  (test-assert (procedure? finger-tree-push-right))
-  (test '(10) (to-list (finger-tree-push-right madd mget f0 10)))
-  (test '(1 10) (to-list (finger-tree-push-right madd mget f1 10)))
-  (test '(1 2 10) (to-list (finger-tree-push-right madd mget f2 10)))
-  (test '(1 2 3 10) (to-list (finger-tree-push-right madd mget f3 10)))
-  (test '(1 2 3 4 10) (to-list (finger-tree-push-right madd mget f4 10)))
-  (test '(1 2 3 4 5 10) (to-list (finger-tree-push-right madd mget f5 10)))
-  (test '(1 2 3 4 5 6 10) (to-list (finger-tree-push-right madd mget f6 10)))
-  (test '(1 2 3 4 5 6 7 10) (to-list (finger-tree-push-right madd mget f7 10)))
-  (test '(1 2 3 4 5 6 7 8 10) (to-list (finger-tree-push-right madd mget f8 10)))
-  (test '(1 2 3 4 5 6 7 8 9 10) (to-list (finger-tree-push-right madd mget f9 10)))
+  ;; finger-tree-add-back
+  (test-assert (procedure? finger-tree-add-back))
+  (test '(10) (to-list (finger-tree-add-back madd mget f0 10)))
+  (test '(1 10) (to-list (finger-tree-add-back madd mget f1 10)))
+  (test '(1 2 10) (to-list (finger-tree-add-back madd mget f2 10)))
+  (test '(1 2 3 10) (to-list (finger-tree-add-back madd mget f3 10)))
+  (test '(1 2 3 4 10) (to-list (finger-tree-add-back madd mget f4 10)))
+  (test '(1 2 3 4 5 10) (to-list (finger-tree-add-back madd mget f5 10)))
+  (test '(1 2 3 4 5 6 10) (to-list (finger-tree-add-back madd mget f6 10)))
+  (test '(1 2 3 4 5 6 7 10) (to-list (finger-tree-add-back madd mget f7 10)))
+  (test '(1 2 3 4 5 6 7 8 10) (to-list (finger-tree-add-back madd mget f8 10)))
+  (test '(1 2 3 4 5 6 7 8 9 10) (to-list (finger-tree-add-back madd mget f9 10)))
 
-  ;; finger-tree-pop-left
-  (test-assert (procedure? finger-tree-pop-left))
-  (test-error (finger-tree-pop-left f0))
-  (test '() (to-list (finger-tree-pop-left f1)))
-  (test '(2) (to-list (finger-tree-pop-left f2)))
-  (test '(2 3) (to-list (finger-tree-pop-left f3)))
-  (test '(2 3 4) (to-list (finger-tree-pop-left f4)))
-  (test '(2 3 4 5) (to-list (finger-tree-pop-left f5)))
-  (test '(2 3 4 5 6) (to-list (finger-tree-pop-left f6)))
-  (test '(2 3 4 5 6 7) (to-list (finger-tree-pop-left f7)))
-  (test '(2 3 4 5 6 7 8) (to-list (finger-tree-pop-left f8)))
-  (test '(2 3 4 5 6 7 8 9) (to-list (finger-tree-pop-left f9)))
+  ;; finger-tree-remove-front
+  (test-assert (procedure? finger-tree-remove-front))
+  (test-error (finger-tree-remove-front f0))
+  (test '() (to-list (finger-tree-remove-front f1)))
+  (test '(2) (to-list (finger-tree-remove-front f2)))
+  (test '(2 3) (to-list (finger-tree-remove-front f3)))
+  (test '(2 3 4) (to-list (finger-tree-remove-front f4)))
+  (test '(2 3 4 5) (to-list (finger-tree-remove-front f5)))
+  (test '(2 3 4 5 6) (to-list (finger-tree-remove-front f6)))
+  (test '(2 3 4 5 6 7) (to-list (finger-tree-remove-front f7)))
+  (test '(2 3 4 5 6 7 8) (to-list (finger-tree-remove-front f8)))
+  (test '(2 3 4 5 6 7 8 9) (to-list (finger-tree-remove-front f9)))
 
-  ;; finger-tree-pop-right
-  (test-assert (procedure? finger-tree-pop-right))
-  (test-error (finger-tree-pop-right f0))
-  (test '() (to-list (finger-tree-pop-right f1)))
-  (test '(1) (to-list (finger-tree-pop-right f2)))
-  (test '(1 2) (to-list (finger-tree-pop-right f3)))
-  (test '(1 2 3) (to-list (finger-tree-pop-right f4)))
-  (test '(1 2 3 4) (to-list (finger-tree-pop-right f5)))
-  (test '(1 2 3 4 5) (to-list (finger-tree-pop-right f6)))
-  (test '(1 2 3 4 5 6) (to-list (finger-tree-pop-right f7)))
-  (test '(1 2 3 4 5 6 7) (to-list (finger-tree-pop-right f8)))
-  (test '(1 2 3 4 5 6 7 8) (to-list (finger-tree-pop-right f9)))  
+  ;; finger-tree-remove-back
+  (test-assert (procedure? finger-tree-remove-back))
+  (test-error (finger-tree-remove-back f0))
+  (test '() (to-list (finger-tree-remove-back f1)))
+  (test '(1) (to-list (finger-tree-remove-back f2)))
+  (test '(1 2) (to-list (finger-tree-remove-back f3)))
+  (test '(1 2 3) (to-list (finger-tree-remove-back f4)))
+  (test '(1 2 3 4) (to-list (finger-tree-remove-back f5)))
+  (test '(1 2 3 4 5) (to-list (finger-tree-remove-back f6)))
+  (test '(1 2 3 4 5 6) (to-list (finger-tree-remove-back f7)))
+  (test '(1 2 3 4 5 6 7) (to-list (finger-tree-remove-back f8)))
+  (test '(1 2 3 4 5 6 7 8) (to-list (finger-tree-remove-back f9)))  
 
   ;; finger-tree-append
   (test-assert (procedure? finger-tree-append))
@@ -243,6 +237,7 @@
       (all-trials f7)
       (all-trials f8)
       (all-trials f9)
+
       (all-trials fn)))
 
   ;; finger-tree-scan/context
@@ -254,9 +249,9 @@
 					       0
 					       tree
 					       (lambda (pre e suf)
-						 (values (to-list (pre))
+						 (values (to-list pre)
 							 e
-							 (to-list (suf))))
+							 (to-list suf)))
 					       (lambda ()
 						 #f))))
 	 (trial/absent (lambda (tree query)
@@ -265,7 +260,7 @@
 			(test-values (values pre e suf) (scan/ctx tree query)))))
 
     (trial/absent f0 1)
-
+  
     (trial/match '() 1 '() f1 1)
     (trial/absent f1 2)
 
@@ -281,14 +276,14 @@
     (let ((all-trials (lambda (tree)
 			(let ((lst (finger-tree->list tree))
 			      (n (finger-tree-length tree)))
-			  (generator-for-each (lambda (e)
-						(trial/match (filter (cute < <> e) lst)
-							     e
-							     (filter (cute > <> e) lst)
-							     tree
-							     e)
-						(trial/absent tree (+ 1 n)))
-					      (finger-tree->generator tree))))))
+			  (for-each (lambda (e)
+				      (trial/match (filter (cute < <> e) lst)
+						   e
+						   (filter (cute > <> e) lst)
+						   tree
+						   e))
+				    lst)
+			  (trial/absent tree (+ 1 n))))))
       (all-trials f4)
       (all-trials f5)
       (all-trials f6)
@@ -305,7 +300,19 @@
   (test-assert (procedure? finger-tree->generator))
   (test '(1 2 3) (generator->list (finger-tree->generator f3)))
 
-  ;; TODO reverse-finger-tree->generator
+  ;; reverse-finger-tree->generator
+  (test '() (generator->list (reverse-finger-tree->generator f0)))
+  (test '(1) (generator->list (reverse-finger-tree->generator f1)))
+  (test '(2 1) (generator->list (reverse-finger-tree->generator f2)))
+  (test '(3 2 1) (generator->list (reverse-finger-tree->generator f3)))
+  (test '(4 3 2 1) (generator->list (reverse-finger-tree->generator f4)))
+  (test '(5 4 3 2 1) (generator->list (reverse-finger-tree->generator f5)))
+  (test '(6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f6)))
+  (test '(7 6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f7)))
+  (test '(8 7 6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f8)))
+  (test '(9 8 7 6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f9)))
+  (test (reverse (iota n))
+	(generator->list (reverse-finger-tree->generator fn)))
 
   ;; list->finger-tree
   ;; finger-tree->list

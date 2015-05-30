@@ -10,6 +10,15 @@
 	    (set! list (cdr list))
 	    obj)))))
 
+(define (vector->generator vect)
+  (gmap (cute vector-ref vect <>)
+	(make-range-generator 0 (vector-length vect))))
+
+(define (reverse-vector->generator vect)
+  (gmap (lambda (i)
+	  (vector-ref vect (- (vector-length vect) i 1)))
+	(make-range-generator 0 (vector-length vect))))
+
 ;;;; data types
 
 ;;; A finger tree may have three shapes:
@@ -280,25 +289,14 @@
 				   (make-node3 madd mget a b c)))
 			(digit d obj))))))))
 
-(define (deep-drop-left l sp r k)
-  (if (< k (digit-length l))
-      (make-deep (digit-drop l k) sp r)
-      (deep-replenish-left (force sp) r)))
-
-(define (deep-drop-right l sp r k)
-  (let ((n (digit-length r)))
-    (if (< k n)
-	(make-deep l sp (digit-take r (- n k)))
-	(deep-replenish-right l (force sp)))))
-
 ;; Repair a deep node that's missing its left digit.
 (define (deep-replenish-left s r)
   (cond
    ((not (empty? s))
     ;; Spine is nonempty so we can simply pull out a node and convert
     ;; it to a digit.
-    (make-deep (node->digit (finger-tree-left s))
-	       (delay (finger-tree-pop-left s))
+    (make-deep (node->digit (finger-tree-front s))
+	       (delay (finger-tree-remove-front s))
 	       r))
    ((digit-nonsingle? r)
     ;; Spine is empty, so no luck there, but the right digit has
@@ -316,16 +314,27 @@
   (cond
    ((not (empty? s))
     (make-deep l
-	       (delay (finger-tree-pop-right s))
-	       (node->digit (finger-tree-right s))))
+	       (delay (finger-tree-remove-back s))
+	       (node->digit (finger-tree-back s))))
    ((digit-nonsingle? l)
-    (make-deep (digit-pop-right l)
+    (make-deep (digit-remove-back l)
 	       *empty-promise*
-	       (digit (digit-right l))))
+	       (digit (digit-back l))))
    (else
-    (make-single (digit-left l)))))
+    (make-single (digit-front l)))))
 
-(define (finger-tree-remove-left tree)
+(define (deep-drop-left l sp r k)
+  (if (< k (digit-length l))
+      (make-deep (digit-drop l k) sp r)
+      (deep-replenish-left (force sp) r)))
+
+(define (deep-drop-right l sp r k)
+  (let ((n (digit-length r)))
+    (if (< k n)
+	(make-deep l sp (digit-take r (- n k)))
+	(deep-replenish-right l (force sp)))))
+
+(define (finger-tree-remove-front tree)
   (let recurse ((tree tree))
     (match-nonempty-tree tree
       ((single x)
@@ -333,7 +342,7 @@
       ((deep l sp r)
        (deep-drop-left l sp r 1)))))
 
-(define (finger-tree-remove-right tree)
+(define (finger-tree-remove-back tree)
   (let recurse ((tree tree))
     (match-nonempty-tree tree
       ((single x)
@@ -388,14 +397,15 @@
 	 ((single x)
 	  (proc x))
 	 ((deep l sp r)
-	  (generator-for-each proc (vector->generator l))
-	  (recurse (lambda (node)
-		     (proc (node-x node))
-		     (proc (node-y node))
-		     (unless (node2? node)
-		       (proc (node-z node))))
-		   (force sp))
-	  (generator-for-each proc (vector->generator r))))))
+	  (begin
+	    (generator-for-each proc (vector->generator l))
+	    (recurse (lambda (node)
+		       (proc (node-x node))
+		       (proc (node-y node))
+		       (unless (node2? node)
+			       (proc (node-z node))))
+		     (force sp))
+	    (generator-for-each proc (vector->generator r)))))))
    tree))
 
 (define (reverse-finger-tree->generator tree)
@@ -408,14 +418,15 @@
 	 ((single x)
 	  (proc x))
 	 ((deep l sp r)
-	  (generator-for-each proc (reverse-vector->generator r))
-	  (recurse (lambda (node)
-		     (unless (node2? node)
-		       (proc (node-z node)))
-		     (proc (node-y node))
-		     (proc (node-x node))
-		   (force sp))
-	  (generator-for-each proc (reverse-vector->generator r))))))
+	  (begin
+	    (generator-for-each proc (reverse-vector->generator r))
+	    (recurse (lambda (node)
+		       (unless (node2? node)
+			       (proc (node-z node)))
+		       (proc (node-y node))
+		       (proc (node-x node)))
+		     (force sp))
+	    (generator-for-each proc (reverse-vector->generator l)))))))
    tree))
 
 (define (list->finger-tree madd mget list)
@@ -494,7 +505,7 @@
 (define finger-tree-append
   (case-lambda
    ((madd mget left right)
-    (append-binary left right))
+    (append-binary madd mget left right))
    ((madd mget first . rest)
     (fold (lambda (right left)
 	    (append-binary left right))
@@ -511,7 +522,7 @@
 			  (absent))))
     (let ((measure (lambda (m-before e)
 		     (madd m-before (mget e)))))
-      (match/tree tree
+      (match-tree tree
         ((empty)
 	 (absent m-prefix))
 	((single x)
@@ -526,7 +537,7 @@
 		      (m-e (measure m-prefix e)))
 		 (if (mpred m-e)
 		     (match m-prefix e)
-		     (loop (+ 1 i) m-e)))
+		     (lloop (+ 1 i) m-e)))
 	       (recurse node-m
 			m-prefix
 			(force sp)
@@ -537,12 +548,12 @@
 				 (m-y (measure m-x y)))
 			    (cond
 			     ((mpred m-x)
-			      x)
+			      (match m-prefix x))
 			     ((or (node2? node)
 				  (mpred m-y))
-			      y)
+			      (match m-x y))
 			     (else
-			      (node-z node)))))
+			      (match m-y (node-z node))))))
 			(lambda (m-tree)
 			  (let rloop ((i 0) (m-prefix m-tree))
 			    (if (< i (digit-length r))
@@ -550,7 +561,7 @@
 				       (m-e (measure m-prefix e)))
 				  (if (mpred m-e)
 				      (match m-prefix e)
-				      (loop (+ 1 i) m-e)))
+				      (rloop (+ 1 i) m-e)))
 				(absent m-prefix))))))))))))
 			  
 (define (finger-tree-scan/context madd mget mpred mseed tree match absent)
@@ -563,13 +574,13 @@
 			  (absent))))
     (let ((measure (lambda (m-before e)
 		     (madd m-before (mget e)))))
-      (match/tree tree
+      (match-tree tree
         ((empty)
 	 (absent m-prefix))
 	((single x)
 	 (let ((m-x (measure m-prefix x)))
 	   (if (mpred m-x)
-	       (match finger-tree m-prefix x finger-tree)
+	       (match *empty* m-prefix x *empty*)
 	       (absent m-x))))
 	((deep l sp r)
 	 (let ((ln (digit-length l)))
@@ -583,40 +594,40 @@
 			      m-prefix
 			      e
 			      (deep-drop-left l sp r i+1))
-		       (loop i+1 m-e)))
+		       (lloop i+1 m-e)))
 		 (recurse node-m
 			  m-prefix
-			  s
-			  (lambda (prefix m-prefix e suffix)
+			  (force sp)
+			  (lambda (prefix m-prefix node suffix)
 			    (let* ((x (node-x node))
 				   (m-x (measure m-prefix x))
 				   (y (node-y node))
 				   (m-y (measure m-x y)))
 			      (cond
 			       ((mpred m-x)
-				(match (deep-replenish-right l (prefix))
+				(match (deep-replenish-right l prefix)
 				       m-prefix
 				       x
 				       (make-deep (if (node2? node)
 						      (digit y)
 						      (digit y (node-z node)))
-						  (suffix)
+						  (delay suffix)
 						  r)))
 			       ((node2? node)
-				(match (make-deep l (prefix) (digit x))
+				(match (make-deep l (delay prefix) (digit x))
 				       m-prefix
 				       y
-				       (deep-replenish-left (suffix) r)))
+				       (deep-replenish-left suffix r)))
 			       ((mpred m-y)
-				(match (make-deep l (prefix) (digit x))
+				(match (make-deep l (delay prefix) (digit x))
 				       m-prefix
 				       y
-				       (make-deep (digit y) (suffix) r)))
+				       (make-deep (digit (node-z node)) (delay suffix) r)))
 			       (else
-				(match (make-deep l (prefix) (digit x y))
+				(match (make-deep l (delay prefix) (digit x y))
 				       m-y
 				       (node-z node)
-				       (deep-replenish-left (suffix) r))))))
+				       (deep-replenish-left suffix r))))))
 			       (lambda (m-after)
 				 (let ((rn (digit-length r)))
 				   (let rloop ((i 0) (m-prefix m-after))
