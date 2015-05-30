@@ -12,28 +12,6 @@
    (srfi 8)
    (srfi 26))
 
-  ;; finger-tree
-  (export
-   finger-tree/empty
-   finger-tree
-   finger-tree?
-   finger-tree-empty?
-   finger-tree-length
-   finger-tree-left
-   finger-tree-right
-   finger-tree-push-left
-   finger-tree-push-right
-   finger-tree-pop-left
-   finger-tree-pop-right
-   finger-tree-append
-   finger-tree-scan
-   finger-tree-scan/context
-   generator->finger-tree
-   finger-tree->generator
-   reverse-finger-tree->generator
-   list->finger-tree
-   finger-tree->list)
-
   ;; ideque
   (export
    ideque

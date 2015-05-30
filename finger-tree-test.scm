@@ -1,116 +1,319 @@
 
 (import
- (finger-tree)
  (chibi test)
+ (generators)
+ (immutable finger-tree)
  (scheme base)
  (scheme write)
  (srfi 1)
- (util))
+ (srfi 26))
 
-(define empty (make-finger-tree))
-(define five-list (iota 5))
-(define five (list->finger-tree five-list))
-(define century-list (iota 100))
-(define century (list->finger-tree century-list))
+(let* ((n 100) ; moderately large n
 
-;; make-finger-tree
-(test #true (finger-tree? (make-finger-tree)))
+       (madd max)
+       (mget (lambda (x)
+	       x))
 
-;; finger-tree?
-(test #true (finger-tree? empty))
-(test #true (finger-tree? five))
-(test #true (finger-tree? century))
-(test #false (finger-tree? '(1 2 3)))
-(test #false (finger-tree? 7))
-(test #false (finger-tree? #false))
+       (to-list finger-tree->list)
 
-;; finger-tree-empty?
-(test #true (finger-tree-empty? empty))
-(test #false (finger-tree-empty? century))
+       (f0 (finger-tree/empty)) ; empty
+       (f1 (finger-tree madd mget 1)) ; single
+       (f2 (finger-tree madd mget 1 2)) ; 2-4 case
+       (f3 (finger-tree madd mget 1 2 3))
+       (f4 (finger-tree madd mget 1 2 3 4))
+       (f5 (finger-tree madd mget 1 2 3 4 5)) ; 5-8 case
+       (f6 (finger-tree madd mget 1 2 3 4 5 6))
+       (f7 (finger-tree madd mget 1 2 3 4 5 6 7))
+       (f8 (finger-tree madd mget 1 2 3 4 5 6 7 8))
+       (f9 (finger-tree madd mget 1 2 3 4 5 6 7 8 9)) ; 9+ case
+       (fn (list->finger-tree madd mget (iota n))))
 
-;; finger-tree-length
-(test 0 (finger-tree-length empty))
-(test 5 (finger-tree-length five))
-(test 100 (finger-tree-length century))
+  ;; finger-tree/empty
+  (test-assert (procedure? finger-tree/empty))
+  (test-assert (finger-tree? f0))
+  (test-assert (finger-tree-empty? f0))
+  (test '() (to-list f0))
 
-;; finger-tree-front
-(test 0 (finger-tree-front five))
-(test 0 (finger-tree-front century))
+  ;; finger-tree
+  (test-assert (procedure? finger-tree))
+  (test-assert (eqv? f0 (finger-tree madd mget))) ; equivalent to (finger-tree/empty)
+  (test '(1) (to-list f1))
+  (test '(1 2) (to-list f2))
+  (test '(1 2 3) (to-list f3))
+  (test '(1 2 3 4) (to-list f4))
+  (test '(1 2 3 4 5) (to-list f5))
+  (test '(1 2 3 4 5 6) (to-list f6))
+  (test '(1 2 3 4 5 6 7) (to-list f7))
+  (test '(1 2 3 4 5 6 7 8) (to-list f8))
+  (test '(1 2 3 4 5 6 7 8 9) (to-list f9))
 
-;; finger-tree-back
-(test 4 (finger-tree-back five))
-(test 99 (finger-tree-back century))
+  ;; finger-tree?
+  (test-assert (procedure? finger-tree?))
+  (test #f (finger-tree? 7))
+  (test #f (finger-tree? '()))
+  (test #f (finger-tree? #f))
+  (test #t (finger-tree? f0))
+  (test #t (finger-tree? f1))
+  (test #t (finger-tree? f2))
+  (test #t (finger-tree? f3))
+  (test #t (finger-tree? f4))
+  (test #t (finger-tree? f5))
+  (test #t (finger-tree? f6))
+  (test #t (finger-tree? f7))
+  (test #t (finger-tree? f8))
+  (test #t (finger-tree? f9))
 
-;; finger-tree-push-front
-;; finger-tree-push-back
-(let loop ((i 0)
-	   (front-list '())
-	   (back-list '())
-	   (front-tree (make-finger-tree))
-	   (back-tree (make-finger-tree)))
-  (unless (= i 1000)
-    (test front-list (finger-tree->list front-tree))
-    (test back-list (finger-tree->list back-tree))
-    (loop (add1 i)
-	  (cons i front-list)
-	  (append back-list (list i))
-	  (finger-tree-push-front front-tree i)
-	  (finger-tree-push-back back-tree i))))
+  ;; finger-tree-empty?
+  (test-assert (procedure? finger-tree-empty?))
+  (test #t (finger-tree-empty? f0))
+  (test #f (finger-tree-empty? f1))
+  (test #f (finger-tree-empty? f2))
+  (test #f (finger-tree-empty? f3))
+  (test #f (finger-tree-empty? f4))
+  (test #f (finger-tree-empty? f5))
+  (test #f (finger-tree-empty? f6))
+  (test #f (finger-tree-empty? f7))
+  (test #f (finger-tree-empty? f8))
+  (test #f (finger-tree-empty? f9))
 
-;; finger-tree-pop-front
-;; finger-tree-pop-back
-(let loop ((front-list century-list)
-	   (back-list century-list)
-	   (front-tree century)
-	   (back-tree century))
-  (unless (finger-tree-empty? front-tree)
-    (test front-list (finger-tree->list front-tree))
-    (test back-list (finger-tree->list back-tree))
-    (loop (cdr front-list)
-	  (drop-right back-list 1)
-	  (finger-tree-pop-front front-tree)
-	  (finger-tree-pop-back back-tree))))
+  ;; finger-tree-length
+  (test-assert (procedure? finger-tree-length))
+  (test 0 (finger-tree-length f0))
+  (test 1 (finger-tree-length f1))
+  (test 2 (finger-tree-length f2))
+  (test 3 (finger-tree-length f3))
+  (test 4 (finger-tree-length f4))
+  (test 5 (finger-tree-length f5))
+  (test 6 (finger-tree-length f6))
+  (test 7 (finger-tree-length f7))
+  (test 8 (finger-tree-length f8))
+  (test 9 (finger-tree-length f9))
 
-;; finger-tree-append
-(let loop ((i 0)
-	   (lin-list five-list) ; grows linearly
-	   (exp-list five-list) ; grows exponentially
-	   (lin-tree five)
-	   (exp-tree five))
-  (when (<= i 10)
-    (test lin-list (finger-tree->list lin-tree))
-    (test exp-list (finger-tree->list exp-tree))
-    (loop (add1 i)
-	  (append lin-list five-list)
-	  (append exp-list exp-list)
-	  (finger-tree-append lin-tree five)
-	  (finger-tree-append exp-tree exp-tree))))
+  ;; finger-tree-left
+  (test-assert (procedure? finger-tree-left))
+  (test-error (finger-tree-left f0))
+  (test 1 (finger-tree-left f1))
+  (test 1 (finger-tree-left f2))
+  (test 1 (finger-tree-left f3))
+  (test 1 (finger-tree-left f4))
+  (test 1 (finger-tree-left f5))
+  (test 1 (finger-tree-left f6))
+  (test 1 (finger-tree-left f7))
+  (test 1 (finger-tree-left f8))
+  (test 1 (finger-tree-left f9))
 
-;; finger-tree-filter
-(test (filter even? century-list)
-      (finger-tree->list (finger-tree-filter even? century)))
+  ;; finger-tree-right
+  (test-assert (procedure? finger-tree-right))
+  (test-error (finger-tree-right f0))
+  (test 1 (finger-tree-right f1))
+  (test 2 (finger-tree-right f2))
+  (test 3 (finger-tree-right f3))
+  (test 4 (finger-tree-right f4))
+  (test 5 (finger-tree-right f5))
+  (test 6 (finger-tree-right f6))
+  (test 7 (finger-tree-right f7))
+  (test 8 (finger-tree-right f8))
+  (test 9 (finger-tree-right f9))
 
-;; finger-tree-fold
-(test (fold + 0 century-list)
-      (finger-tree-fold + 0 century))
-(test (fold cons '() century-list)
-      (finger-tree-fold cons '() century))
+  ;; finger-tree-push-left
+  (test-assert (procedure? finger-tree-push-left))
+  (test '(10) (to-list (finger-tree-push-left madd mget f0 10)))
+  (test '(10 1) (to-list (finger-tree-push-left madd mget f1 10)))
+  (test '(10 1 2) (to-list (finger-tree-push-left madd mget f2 10)))
+  (test '(10 1 2 3) (to-list (finger-tree-push-left madd mget f3 10)))
+  (test '(10 1 2 3 4) (to-list (finger-tree-push-left madd mget f4 10)))
+  (test '(10 1 2 3 4 5) (to-list (finger-tree-push-left madd mget f5 10)))
+  (test '(10 1 2 3 4 5 6) (to-list (finger-tree-push-left madd mget f6 10)))
+  (test '(10 1 2 3 4 5 6 7) (to-list (finger-tree-push-left madd mget f7 10)))
+  (test '(10 1 2 3 4 5 6 7 8) (to-list (finger-tree-push-left madd mget f8 10)))
+  (test '(10 1 2 3 4 5 6 7 8 9) (to-list (finger-tree-push-left madd mget f9 10)))
 
-;; finger-tree-map
-(test (map add1 century-list)
-      (finger-tree->list (finger-tree-map add1 century)))
+  ;; finger-tree-push-right
+  (test-assert (procedure? finger-tree-push-right))
+  (test '(10) (to-list (finger-tree-push-right madd mget f0 10)))
+  (test '(1 10) (to-list (finger-tree-push-right madd mget f1 10)))
+  (test '(1 2 10) (to-list (finger-tree-push-right madd mget f2 10)))
+  (test '(1 2 3 10) (to-list (finger-tree-push-right madd mget f3 10)))
+  (test '(1 2 3 4 10) (to-list (finger-tree-push-right madd mget f4 10)))
+  (test '(1 2 3 4 5 10) (to-list (finger-tree-push-right madd mget f5 10)))
+  (test '(1 2 3 4 5 6 10) (to-list (finger-tree-push-right madd mget f6 10)))
+  (test '(1 2 3 4 5 6 7 10) (to-list (finger-tree-push-right madd mget f7 10)))
+  (test '(1 2 3 4 5 6 7 8 10) (to-list (finger-tree-push-right madd mget f8 10)))
+  (test '(1 2 3 4 5 6 7 8 9 10) (to-list (finger-tree-push-right madd mget f9 10)))
 
-;; finger-tree->list
-(test '() (finger-tree->list empty))
-(test five-list (finger-tree->list five))
-(test century-list (finger-tree->list century))
+  ;; finger-tree-pop-left
+  (test-assert (procedure? finger-tree-pop-left))
+  (test-error (finger-tree-pop-left f0))
+  (test '() (to-list (finger-tree-pop-left f1)))
+  (test '(2) (to-list (finger-tree-pop-left f2)))
+  (test '(2 3) (to-list (finger-tree-pop-left f3)))
+  (test '(2 3 4) (to-list (finger-tree-pop-left f4)))
+  (test '(2 3 4 5) (to-list (finger-tree-pop-left f5)))
+  (test '(2 3 4 5 6) (to-list (finger-tree-pop-left f6)))
+  (test '(2 3 4 5 6 7) (to-list (finger-tree-pop-left f7)))
+  (test '(2 3 4 5 6 7 8) (to-list (finger-tree-pop-left f8)))
+  (test '(2 3 4 5 6 7 8 9) (to-list (finger-tree-pop-left f9)))
 
-;; list->finger-tree
-(test century-list
-      (finger-tree->list (list->finger-tree century-list)))
+  ;; finger-tree-pop-right
+  (test-assert (procedure? finger-tree-pop-right))
+  (test-error (finger-tree-pop-right f0))
+  (test '() (to-list (finger-tree-pop-right f1)))
+  (test '(1) (to-list (finger-tree-pop-right f2)))
+  (test '(1 2) (to-list (finger-tree-pop-right f3)))
+  (test '(1 2 3) (to-list (finger-tree-pop-right f4)))
+  (test '(1 2 3 4) (to-list (finger-tree-pop-right f5)))
+  (test '(1 2 3 4 5) (to-list (finger-tree-pop-right f6)))
+  (test '(1 2 3 4 5 6) (to-list (finger-tree-pop-right f7)))
+  (test '(1 2 3 4 5 6 7) (to-list (finger-tree-pop-right f8)))
+  (test '(1 2 3 4 5 6 7 8) (to-list (finger-tree-pop-right f9)))  
 
-(let ((n (* 1000 1000)))
-  (newline)
-  (timer (string-append "finger-tree->list, n = "
-			(number->string n))
-	 (list->finger-tree (iota n))))
+  ;; finger-tree-append
+  (test-assert (procedure? finger-tree-append))
+  (let ((trial (lambda (list l r)
+		 (test list (to-list (finger-tree-append madd mget l r))))))
+    ;; empty left
+    (trial '() f0 f0)
+    (trial '(1) f0 f1)
+    (trial '(1 2 3) f0 f3)
+
+    ;; empty right
+    (trial '() f0 f0)
+    (trial '(1) f1 f0)
+    (trial '(1 2 3) f3 f0)
+
+    ;; single left
+    (trial '(1) f1 f0)
+    (trial '(1 1) f1 f1)
+    (trial '(1 1 2 3) f1 f3)
+
+    ;; single right
+    (trial '(1) f0 f1)
+    (trial '(1 1) f1 f1)
+    (trial '(1 2 3 1) f3 f1)
+
+    ;; both operands deep
+    (trial '(1 2 1 2) f2 f2) ; 2 loose
+    (trial '(1 2 3 1 2) f3 f2) ; 3 loose
+    (trial '(1 2 3 4 1 2) f4 f2) ; 4 loose
+    (trial '(1 2 3 4 5 1 2) f5 f2) ; 5 loose
+    (trial '(1 2 3 4 5 6 1 2) f6 f2) ; 6 loose
+    (trial '(1 2 3 4 5 6 7 1 2) f7 f2) ; 7 loose
+    (trial '(1 2 3 4 5 6 7 8 1 2) f8 f2) ; 8 loose
+
+    ;; recurses into spine
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3) f9 f3)
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3 4) f9 f4)
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3 4 5) f9 f5)
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3 4 5 6) f9 f6)
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7) f9 f7)
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8) f9 f8)
+    (trial '(1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9) f9 f9))
+
+  ;; finger-tree-scan
+  (test-assert (procedure? finger-tree-scan))
+  (let ((trial (lambda (exp tree query)
+		 (test exp
+		       (finger-tree-scan madd
+					 mget
+					 (cute >= <> query)
+					 0
+					 tree
+					 (lambda (match)
+					   match)
+					 (lambda ()
+					   #f))))))
+    (trial #f f0 1)
+
+    (trial 1 f1 1)
+    (trial #f f1 2)
+
+    (trial 1 f2 1)
+    (trial 2 f2 2)
+    (trial #f f2 3)
+
+    (let ((all-trials (lambda (tree)
+			(generator-for-each (lambda (e)
+					      (trial e tree e))
+					    (finger-tree->generator tree))
+			(trial #f tree (+ 1 (finger-tree-length tree))))))
+      (all-trials f3)
+      (all-trials f4)
+      (all-trials f5)
+      (all-trials f6)
+      (all-trials f7)
+      (all-trials f8)
+      (all-trials f9)
+      (all-trials fn)))
+
+  ;; finger-tree-scan/context
+  (test-assert (procedure? finger-tree-scan/context))
+  (let* ((scan/ctx (lambda (tree query)
+		     (finger-tree-scan/context madd
+					       mget
+					       (cute >= <> query)
+					       0
+					       tree
+					       (lambda (pre e suf)
+						 (values (to-list (pre))
+							 e
+							 (to-list (suf))))
+					       (lambda ()
+						 #f))))
+	 (trial/absent (lambda (tree query)
+			 (test #f (scan/ctx tree query))))
+	 (trial/match (lambda (pre e suf tree query)
+			(test-values (values pre e suf) (scan/ctx tree query)))))
+
+    (trial/absent f0 1)
+
+    (trial/match '() 1 '() f1 1)
+    (trial/absent f1 2)
+
+    (trial/match '() 1 '(2) f2 1)
+    (trial/match '(1) 2 '() f2 2)
+    (trial/absent f2 3)
+
+    (trial/match '() 1 '(2 3) f3 1)
+    (trial/match '(1) 2 '(3) f3 2)
+    (trial/match '(1 2) 3 '() f3 3)
+    (trial/absent f3 4)
+
+    (let ((all-trials (lambda (tree)
+			(let ((lst (finger-tree->list tree))
+			      (n (finger-tree-length tree)))
+			  (generator-for-each (lambda (e)
+						(trial/match (filter (cute < <> e) lst)
+							     e
+							     (filter (cute > <> e) lst)
+							     tree
+							     e)
+						(trial/absent tree (+ 1 n)))
+					      (finger-tree->generator tree))))))
+      (all-trials f4)
+      (all-trials f5)
+      (all-trials f6)
+      (all-trials f7)
+      (all-trials f8)
+      (all-trials f9)
+      (all-trials fn)))
+
+  ;; generator->finger-tree
+  ;; finger-tree->generator
+  ;; (nontrivial cases are covered by the list conversion procedures below)
+  (test-assert (procedure? generator->finger-tree))
+  (test '(1 2 3) (to-list (generator->finger-tree madd mget (make-generator 1 2 3))))
+  (test-assert (procedure? finger-tree->generator))
+  (test '(1 2 3) (generator->list (finger-tree->generator f3)))
+
+  ;; TODO reverse-finger-tree->generator
+
+  ;; list->finger-tree
+  ;; finger-tree->list
+  (test-assert (procedure? list->finger-tree))
+  (test-assert (procedure? finger-tree->list))
+  (do ((i 0 (+ 1 i)))
+      ((= i n))
+    (let ((lst (iota i)))
+      (test lst  (finger-tree->list (list->finger-tree madd mget lst)))))
+
+  ) ;; let
