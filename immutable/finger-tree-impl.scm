@@ -615,12 +615,12 @@
 						  r)))
 			       ((node2? node)
 				(match (make-deep l (delay prefix) (digit x))
-				       m-prefix
+				       m-x
 				       y
 				       (deep-replenish-left suffix r)))
 			       ((mpred m-y)
 				(match (make-deep l (delay prefix) (digit x))
-				       m-prefix
+				       m-x
 				       y
 				       (make-deep (digit (node-z node)) (delay suffix) r)))
 			       (else

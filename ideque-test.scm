@@ -1,168 +1,210 @@
 
 (import
- (chibi loop)
  (chibi test)
- (ideque)
+ (generators)
+ (immutable deque)
  (scheme base)
- (scheme write)
+ (scheme write) ; TODO: remove
  (srfi 1)
- (util))
+ (srfi 8)
+ (srfi 26))
 
-;; ideque
-;; ideque-length
-(define empty (ideque))
-(test-assert (ideque? empty))
-(test-assert (ideque-empty? empty))
-(define three (ideque 0 1 2))
-(test-assert (ideque? three))
-(test 3 (ideque-length three))
-(define mil/list (iota 1000))
-(define mil (list->ideque mil/list))
-(test-assert (ideque? mil))
-(test 1000 (ideque-length mil))
+(let* ((d0 (ideque))
+       (d1 (ideque 1))
+       (l1 '(1))
+       (d5 (ideque 1 2 3 4 5))
+       (l5 '(1 2 3 4 5))
+       (l100 (iota 100))
+       (d100 (list->ideque l100)))
 
-;; ideque?
-(test-assert (ideque? empty))
-(test-assert (ideque? three))
-(test-not (ideque? '()))
-(test-not (ideque? #f))
+  ;; ideque
+  (test-assert (ideque? d0))
+  (test '() (ideque->list d0))
+  (test-assert (ideque? d1))
+  (test '(1) (ideque->list d1))
+  (test-assert (ideque? d5))
+  (test '(1 2 3 4 5) (ideque->list d5))
+  (test-assert (ideque? d100))
+  (test l100 (ideque->list d100))
 
-;; ideque-empty?
-(test-assert (ideque-empty? empty))
-(test-not (ideque-empty? three))
+  ;; ideque-tabulate
+  (test (list-tabulate 100 -)
+	(ideque->list (ideque-tabulate 100 -)))
 
-;; ideque-front
-;; ideque-back
-(test-error (ideque-front empty))
-(test-error (ideque-back empty))
-(test 0 (ideque-front three))
-(test 2 (ideque-back three))
-(test 0 (ideque-front mil))
-(test 999 (ideque-back mil))
+  ;; ideque-unfold
+  ;; ideque-unfold-right
+  ;; first 4 perfect squares
+  (let ((stop? (cute > <> 4))
+	(mapper (cute expt <> 2))
+	(successor (cute + <> 1))
+	(seed 1))
+    (test '(1 4 9 16) (ideque->list (ideque-unfold stop? mapper successor seed)))
+    (test '(16 9 4 1) (ideque->list (ideque-unfold-right stop? mapper successor seed))))
 
-;; ideque-push-front
-(let ((dq (ideque-push-front empty 'x)))
-  (test-not (ideque-empty? dq))
-  (test 1 (ideque-length dq))
-  (test '(x) (ideque->list dq)))
-(let ((dq (ideque-push-front three 'x)))
-  (test-not (ideque-empty? dq))
-  (test 4 (ideque-length dq))
-  (test '(x 0 1 2) (ideque->list dq)))
-(let ((dq (ideque-push-front mil 'x)))
-  (test-not (ideque-empty? dq))
-  (test 1001 (ideque-length dq))
-  (test (cons 'x mil/list) (ideque->list dq)))
+  ;; ideque?
+  (test #t (ideque? d0))
+  (test #t (ideque? d1))
+  (test #t (ideque? d5))
+  (test #t (ideque? d100))
+  (test #f (ideque? '()))
+  (test #f (ideque? 42))
 
-;; ideque-push-back
-(let ((dq (ideque-push-back empty 'x)))
-  (test-not (ideque-empty? dq))
-  (test 1 (ideque-length dq))
-  (test '(x) (ideque->list dq)))
-(let ((dq (ideque-push-back three 'x)))
-  (test-not (ideque-empty? dq))
-  (test 4 (ideque-length dq))
-  (test '(0 1 2 x) (ideque->list dq)))
-(let ((dq (ideque-push-back mil 'x)))
-  (test-not (ideque-empty? dq))
-  (test 1001 (ideque-length dq))
-  (test (append mil/list '(x)) (ideque->list dq)))
+  ;; ideque-empty?
+  (test #t (ideque-empty? d0))
+  (test #f (ideque-empty? d1))
+  (test #f (ideque-empty? d5))
+  (test #f (ideque-empty? d100))
 
-;; ideque-pop-front
-(test-error (ideque-pop-front empty))
-(let ((dq (ideque-pop-front three)))
-  (test-not (ideque-empty? dq))
-  (test 2 (ideque-length dq))
-  (test '(1 2) (ideque->list dq)))
-(let ((dq (ideque-pop-front mil)))
-  (test-not (ideque-empty? dq))
-  (test 999 (ideque-length dq))
-  (test (cdr mil/list) (ideque->list dq)))
+  ;; ideque-front
+  (test-error (ideque-front d0))
+  (test 1 (ideque-front d1))
+  (test 1 (ideque-front d5))
+  (test 0 (ideque-front d100))
 
-;; ideque-pop-back
-(test-error (ideque-pop-back empty))
-(let ((dq (ideque-pop-back three)))
-  (test-not (ideque-empty? dq))
-  (test 2 (ideque-length dq))
-  (test '(0 1) (ideque->list dq)))
-(let ((dq (ideque-pop-back mil)))
-  (test-not (ideque-empty? dq))
-  (test 999 (ideque-length dq))
-  (test (drop-right mil/list 1) (ideque->list dq)))
+  ;; ideque-back
+  (test-error (ideque-back d0))
+  (test 1 (ideque-back d1))
+  (test 5 (ideque-back d5))
+  (test 99 (ideque-back d100))
 
-;; ideque-take-front
-;; ideque-take-front/list
-;; ideque-take-front/values
-(test-error (ideque-take-front empty 1))
-(test '() (ideque->list (ideque-take-front three 0)))
-(test '() (ideque-take-front/list three 0))
-(test '(0) (ideque->list (ideque-take-front three 1)))
-(test '(0) (ideque-take-front/list three 1))
-(test-values (values 0) (ideque-take-front/values three 1))
-(test '(0 1) (ideque->list (ideque-take-front three 2)))
-(test '(0 1) (ideque-take-front/list three 2))
-(test-values (values 0 1) (ideque-take-front/values three 2))
-(test '(0 1 2) (ideque->list (ideque-take-front three 3)))
-(test '(0 1 2) (ideque-take-front/list three 3))
-(test-values (values 0 1 2) (ideque-take-front/values three 3))
-(test-error (ideque-take-front three 4))
-(test-error (ideque-take-front/list three 4))
-(test-error (ideque-take-front/values three 4))
+  ;; ideque-remove-front
+  (test-error (ideque-remove-front d0))
+  (test '() (ideque->list (ideque-remove-front d1)))
+  (test '(2 3 4 5) (ideque->list (ideque-remove-front d5)))
+  (test (cdr l100) (ideque->list (ideque-remove-front d100)))
 
-;; ideque-take-back
-;; ideque-take-back/list
-;; ideque-take-back/values
-(test-error (ideque-take-back empty 1))
-(test '() (ideque->list (ideque-take-back three 0)))
-(test '() (ideque-take-back/list three 0))
-(test-values (values) (ideque-take-back/values three 0))
-(test '(2) (ideque->list (ideque-take-back three 1)))
-(test '(2) (ideque-take-back/list three 1))
-(test-values (values 2) (ideque-take-back/values three 1))
-(test '(1 2) (ideque->list (ideque-take-back three 2)))
-(test '(1 2) (ideque-take-back/list three 2))
-(test-values (values 1 2) (ideque-take-back/values three 2))
-(test '(0 1 2) (ideque->list (ideque-take-back three 3)))
-(test '(0 1 2) (ideque-take-back/list three 3))
-(test-values (values 0 1 2) (ideque-take-back/values three 3))
-(test-error (ideque-take-back three 4))
-(test-error (ideque-take-back/list three 4))
-(test-error (ideque-take-back/values three 4))
+  ;; ideque-remove-back
+  (test-error (ideque-remove-back d0))
+  (test '() (ideque->list (ideque-remove-back d1)))
+  (test '(1 2 3 4) (ideque->list (ideque-remove-back d5)))
+  (test (take l100 99) (ideque->list (ideque-remove-back d100)))
 
-;; ideque-append
-;; two arguments
-(test '() (ideque->list (ideque-append empty empty)))
-(test '(0 1 2) (ideque->list (ideque-append empty three)))
-(test '(0 1 2) (ideque->list (ideque-append three empty)))
-(test '(0 1 2 0 1 2) (ideque->list (ideque-append three three)))
-(test '(0 1 2 x y) (ideque->list (ideque-append three (ideque 'x 'y))))
-(test '(x y 0 1 2) (ideque->list (ideque-append (ideque 'x 'y) three)))
-;; multiple arguments
-(test '(7 8 1 2 3 0 1) (ideque->list (ideque-append (ideque 7 8) (ideque 1 2 3) (ideque 0 1))))
-;; various lengths
-(loop ((for i (up-from 0 (to 20))))
-      (loop ((for j (up-from 0 (to 20))))
-	    (let ((l (iota i))
-		  (r (iota j)))
-	    (test (append (iota i) (iota j))
-		  (ideque->list (ideque-append (list->ideque l) (list->ideque r)))))))
+  ;; ideque-add-front
+  (test '(9) (ideque->list (ideque-add-front d0 9)))
+  (test '(9 1) (ideque->list (ideque-add-front d1 9)))
+  (test '(9 1 2 3 4 5) (ideque->list (ideque-add-front d5 9)))
+  (test (cons 9 l100) (ideque->list (ideque-add-front d100 9)))
 
-;; ideque-filter
-;; ideque-fold
-;; ideque-map
-(test (filter even? mil/list) (ideque->list (ideque-filter even? mil)))
-(test (fold cons '() mil/list) (ideque-fold cons '() mil))
-(test (map add1 mil/list) (ideque->list (ideque-map add1 mil)))
+  ;; ideque-add-back
+  (test '(9) (ideque->list (ideque-add-back d0 9)))
+  (test '(1 9) (ideque->list (ideque-add-back d1 9)))
+  (test '(1 2 3 4 5 9) (ideque->list (ideque-add-back d5 9)))
+  (test (append l100 (list 9)) (ideque->list (ideque-add-back d100 9)))
 
-;; list->ideque
-;; ideque->list
-(test '(0) (ideque->list (ideque 0)))
-(test '(0 1 2) (ideque->list three))
-(test mil/list (ideque->list mil))
-(loop ((for n (up-from 0 (to 100))))
-      (let* ((lst (iota n))
-	     (dq (list->ideque lst)))
-	(test (zero? n) (ideque-empty? dq))
-	(test n (ideque-length dq))
-	(test lst (ideque->list dq))
-	(test lst (ideque->list (list->ideque lst)))))
+  (do ((i 0 (+ 1 i)))
+      ((= i 10))
+
+    (let* ((li (iota i))
+	   (di (list->ideque li)))
+
+      ;; ideque-take
+      (test (take l100 i) (ideque->list (ideque-take d100 i)))
+
+      ;; ideque-take-right
+      (test (take-right l100 i) (ideque->list (ideque-take-right d100 i)))
+
+      ;; ideque-drop
+      (test (drop l100 i) (ideque->list (ideque-drop d100 i)))
+
+      ;; ideque-drop-right
+      (test (drop-right l100 i) (ideque->list (ideque-drop-right d100 i)))
+
+      ;; ideque-split-at
+      (test-values (split-at l100 i)
+		   (receive (l r) (ideque-split-at d100 i)
+			    (values (ideque->list l) (ideque->list r))))
+
+      ;; ideque-length
+      (test i (ideque-length (list->ideque (iota i))))
+
+      ;; ideque-append
+      (test (append l1 li) (ideque->list (ideque-append d1 di)))
+      (test (append l5 li) (ideque->list (ideque-append d5 di)))
+      (test (append l100 li) (ideque->list (ideque-append d100 di)))
+
+      ;; ideque-concatenate TODO
+
+      ;; ideque-count
+      (test (count positive? li) (ideque-count positive? di))
+
+      ;; ideque-zip TODO
+
+    )) ; do loop
+
+  ;; ideque-reverse
+  (test '() (ideque->list (ideque-reverse d0)))
+  (test '(1) (ideque->list (ideque-reverse d1)))
+  (test (reverse l5) (ideque->list (ideque-reverse d5)))
+  (test (reverse l100) (ideque->list (ideque-reverse d100)))
+
+  ;; ideque-map
+  (let ((double (cute * 2 <>)))
+    (test (map double '())  (ideque->list (ideque-map double d0)))
+    (test (map double l1)   (ideque->list (ideque-map double d1)))
+    (test (map double '())  (ideque->list (ideque-map double d0)))
+    (test (map double l5)   (ideque->list (ideque-map double d5)))
+    (test (map double l100) (ideque->list (ideque-map double d100))))
+
+  ;; ideque-for-each
+  (let ((total 0))
+    (ideque-for-each (lambda (i)
+		       (set! total (+ i total)))
+		     d100)
+    (test (fold + 0 l100) (+ 0 total)))
+
+  ;; ideque-fold
+  (test (fold cons '() '()) (ideque-fold cons '() d0))
+  (test (fold cons '() l5) (ideque-fold cons '() d5))
+  (test (fold cons '() l100) (ideque-fold cons '() d100))
+
+  ;; ideque-fold-right
+  (test (fold-right cons '() '()) (ideque-fold-right cons '() d0))
+  (test (fold-right cons '() l5) (ideque-fold-right cons '() d5))
+  (test (fold-right cons '() l100) (ideque-fold-right cons '() d100))
+
+  ;; ideque-append-map
+  ;; TODO
+
+  ;; ideque-filter
+  (test (filter even? l100) (ideque->list (ideque-filter even? d100)))
+
+  ;; ideque-remove
+  (test (remove even? l100) (ideque->list (ideque-remove even? d100)))
+
+  ;; ideque-partition
+  (test-values (partition even? l100)
+	       (receive (pre suf)
+			(ideque-partition even? d100)
+	         (values (ideque->list pre) (ideque->list suf))))
+
+  ;; ideque-find
+  ;; ideque-find-right
+  ;; ideque-take-while
+  ;; ideque-take-while-right
+  ;; ideque-drop-while
+  ;; ideque-drop-while-right
+  ;; ideque-span
+  ;; ideque-break
+  ;; ideque-any
+  ;; ideque-every
+  ;; TODO
+
+  ;; list->ideque
+  ;; ideque->list
+  (test '() (ideque->list d0))
+  (test l5 (ideque->list d5))
+  (test l100 (ideque->list d100))
+  ;; round-trip
+  (test '() (ideque->list (list->ideque (ideque->list d0))))
+  (test l5 (ideque->list (list->ideque (ideque->list d5))))
+  (test l100 (ideque->list (list->ideque (ideque->list d100))))
+
+  ;; generator->ideque
+  ;; ideque->generator
+  ;; (implicitly tested by list->ideque and ideque->list)
+
+  ;; ideque-comparator
+  ;; make-ideque-comparator
+  ;; TODO
+
+  )
