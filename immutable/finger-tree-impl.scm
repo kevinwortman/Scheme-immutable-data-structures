@@ -508,7 +508,7 @@
     (append-binary madd mget left right))
    ((madd mget first . rest)
     (fold (lambda (right left)
-	    (append-binary left right))
+	    (append-binary madd mget left right))
 	  first
 	  rest))))
 
@@ -642,3 +642,204 @@
 						      (digit->finger-tree r i+1 rn))
 					       (rloop i+1 m-e)))
 					 (absent m-prefix))))))))))))))
+
+(define *pseudoset-bottom* (list 'bottom))
+(define (pseudoset-madd l r)
+  r)
+(define (pseudoset-mget e)
+  e)
+(define (make-pseudoset-mpred kcmp kget obj)
+  (lambda (e)
+    (and (not (eq? e *pseudoset-bottom*))
+	 (>=? kcmp (kget e) (kget obj)))))
+
+(define (pseudoset-finger-tree-find kcmp kget tree obj match absent)
+  (finger-tree-scan pseudoset-madd
+		    pseudoset-mget
+		    (make-pseudoset-mpred kcmp kget obj)
+		    *pseudoset-bottom*
+		    tree
+		    (lambda (e) ; match
+		      (if (=? kcmp (kget e) (kget obj))
+			  (match e)
+			  (absent)))
+		    absent))
+
+;;; Search for some e in tree whose key is equal to obj's key,
+;;; according to kcmp and kget.
+;;;
+;;; If such an e exists, calls (match e replace remove) where e is the
+;;; matching element, (replace x) returns a tree with x taking the
+;;; place of e, and (remove) returns a tree with e removed.
+;;;
+;;; If no such e exists, calls (absent insert); (insert) returns the
+;;; tree with e included.
+(define (pseudoset-finger-tree-update kcmp kget tree obj match absent)
+  (let ((mpred (make-pseudoset-mpred kcmp kget obj)))
+    (finger-tree-scan/context pseudoset-madd
+			      pseudoset-mget
+			      mpred
+			      *pseudoset-bottom*
+			      tree
+			      (lambda (pre e suf) ; match
+				(if (=? kcmp (kget e) (kget obj))
+				    (match e
+					   ;; replace
+					   (lambda (x)
+					     (finger-tree-append pseudoset-madd
+								 pseudoset-mget
+								 pre
+								 (make-single x)
+								 suf))
+					   ;; remove
+					   (cute finger-tree-append
+						 pseudoset-madd
+						 pseudoset-mget
+						 pre
+						 suf))
+				    (absent (cut finger-tree-append ; insert
+						 pseudoset-madd
+						 pseudoset-mget
+						 pre
+						 (make-double obj e)
+						 suf))))
+			      (lambda () ; absent
+				(absent (cute finger-tree-add-back ; insert
+					      pseudoset-madd
+					      pseudoset-mget
+					      tree
+					      obj))))))
+
+(define-syntax define-subset-pred
+  (syntax-rules ()
+    ((define-subset-pred (IDENTIFIER KCMP KGET LEFT RIGHT)
+       BODY)
+     (define (IDENTIFIER KCMP KGET set1 set2 . rest)
+       (let ((binary-pred (lambda (LEFT RIGHT)
+			    BODY)))
+	 (and (binary-pred set1 set2)
+	      (call/cc
+	       (lambda (return)
+		 (fold (lambda (right left)
+			 (unless (binary-pred left right)
+				 (return #false)))
+		       set2
+		       rest)
+		 (return #true)))))))))
+
+(define-subset-pred (pseudoset-finger-tree=? kcmp kget left right)
+  (let loop ((left left) (right right))
+    (cond
+     ((empty? left)
+      (empty? right))
+     ((empty? right)
+      #false)
+     (else
+      (if (=? kcmp
+	      (kget (finger-tree-front left))
+	      (kget (finger-tree-front right)))
+	  (loop (finger-tree-remove-front left)
+		(finger-tree-remove-front right))
+	  #false)))))
+
+(define-subset-pred (pseudoset-finger-tree<=? kcmp kget left right)
+  (let loop ((left left) (right right))
+    (cond
+     ((empty? left)
+      #true)
+     ((empty? right)
+      #false)
+     (else
+      (if3 (comparator-compare kcmp
+			       (kget (finger-tree-front left))
+			       (kget (finger-tree-front right)))
+	   #false
+	   (loop (finger-tree-remove-front left)
+		 (finger-tree-remove-front right))
+	   (loop left
+		 (finger-tree-remove-front right)))))))
+
+(define-subset-pred (pseudoset-finger-tree<? kcmp kget left right)
+  (let loop ((left left) (right right) (right-has-something-extra #false))
+    (cond
+     ((empty? left)
+      (or (not (empty? right))
+	  right-has-something-extra))
+     ((empty? right)
+      #false)
+     (else
+      (if3 (comparator-compare kcmp
+			       (kget (finger-tree-front left))
+			       (kget (finger-tree-front right)))
+	   #false
+	   (loop (finger-tree-remove-front left)
+		 (finger-tree-remove-front right)
+		 right-has-something-extra)
+	   (loop left
+		 (finger-tree-remove-front right)
+		 #true))))))	   
+
+(define (pseudoset-finger-tree>? kcmp kget . trees)
+  (apply pseudoset-finger-tree<? kcmp kget (reverse! trees)))
+
+(define (pseudoset-finger-tree>=? kcmp kget . trees)
+  (apply pseudoset-finger-tree<=? kcmp kget (reverse! trees)))
+
+(define (pseudoset-binary-operation keep-distinct-left keep-distinct-right
+				    merge-common
+				    kcmp kget
+				    left right)
+  (let ((append (cute finger-tree-append pseudoset-madd pseudoset-mget <> <>))
+	(add-back (cute finger-tree-add-back pseudoset-madd pseudoset-mget <> <>)))
+    (let loop ((left left)
+	       (right right)
+	       (result *empty*))
+      (cond
+       ((empty? left)
+	(if keep-distinct-right
+	    (append result right)
+	    result))
+       ((empty? right)
+	(if keep-distinct-left
+	    (append result left)
+	    result))
+       (else
+	(let ((l (finger-tree-front left))
+	      (r (finger-tree-front right)))
+	  (if3 (comparator-compare kcmp (kget l) (kget r))
+	       (loop (finger-tree-remove-front left)
+		     right
+		     (if keep-distinct-left
+			 (add-back result l)
+			 result))
+	       (loop (finger-tree-remove-front left)
+		     (finger-tree-remove-front right)
+		     (if merge-common
+			 (add-back result (merge-common l r))
+			 result))
+	       (loop left
+		     (finger-tree-remove-front right)
+		     (if keep-distinct-right
+			 (add-back result r)
+			 result)))))))))
+
+(define (pseudoset-finger-tree-union merge-common kcmp kget first . rest)
+  (fold (lambda (right left)
+	  (pseudoset-binary-operation #true #true merge-common kcmp kget left right))
+	first
+	rest))
+
+(define (pseudoset-finger-tree-intersection merge-common kcmp kget first . rest)
+  (fold (lambda (right left)
+	  (pseudoset-binary-operation #false #false merge-common kcmp kget left right))
+	first
+	rest))
+
+(define (pseudoset-finger-tree-difference kcmp kget first . rest)
+  (fold (lambda (right left)
+	  (pseudoset-binary-operation #true #false #false kcmp kget left right))
+	first
+	rest))
+
+(define (pseudoset-finger-tree-xor kcmp kget left right)
+  (pseudoset-binary-operation #true #true #false kcmp kget left right))

@@ -29,6 +29,17 @@
    finger-tree->list
    finger-tree-append
    finger-tree-scan
-   finger-tree-scan/context)
+   finger-tree-scan/context
+   pseudoset-finger-tree-find
+   pseudoset-finger-tree-update
+   pseudoset-finger-tree=?
+   pseudoset-finger-tree<?
+   pseudoset-finger-tree<=?
+   pseudoset-finger-tree>?
+   pseudoset-finger-tree>=?
+   pseudoset-finger-tree-union
+   pseudoset-finger-tree-intersection
+   pseudoset-finger-tree-difference
+   pseudoset-finger-tree-xor)
 
   (include "finger-tree-impl.scm"))

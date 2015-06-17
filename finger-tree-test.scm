@@ -1,20 +1,32 @@
 
 (import
  (chibi test)
+ (comparators)
  (generators)
  (immutable finger-tree)
  (scheme base)
- (scheme write)
+ (scheme write) ; TODO: remove
  (srfi 1)
- (srfi 26))
+ (srfi 26)
+ (srfi 95))
 
 (let* ((n 100) ; moderately large n
 
+       (identity (lambda (x)
+		   x))
+
        (madd max)
-       (mget (lambda (x)
-	       x))
+       (mget identity)
+
+       (kcmp number-comparator)
+       (kget identity)
+       (false-thunk (lambda () #false))
+       (merge-common (lambda (l r)
+		       l))
 
        (to-list finger-tree->list)
+
+       (sort-numbers (cute sort <> (cute <? number-comparator <> <>)))
 
        (f0 (finger-tree)) ; empty
        (f1 (finger-tree madd mget 1)) ; single
@@ -26,7 +38,8 @@
        (f7 (finger-tree madd mget 1 2 3 4 5 6 7))
        (f8 (finger-tree madd mget 1 2 3 4 5 6 7 8))
        (f9 (finger-tree madd mget 1 2 3 4 5 6 7 8 9)) ; 9+ case
-       (fn (list->finger-tree madd mget (iota n))))
+       (ln (iota n))
+       (fn (list->finger-tree madd mget ln)))
 
   ;; finger-tree
   (test-assert (procedure? finger-tree))
@@ -311,7 +324,7 @@
   (test '(7 6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f7)))
   (test '(8 7 6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f8)))
   (test '(9 8 7 6 5 4 3 2 1) (generator->list (reverse-finger-tree->generator f9)))
-  (test (reverse (iota n))
+  (test (reverse ln)
 	(generator->list (reverse-finger-tree->generator fn)))
 
   ;; list->finger-tree
@@ -322,5 +335,123 @@
       ((= i n))
     (let ((lst (iota i)))
       (test lst  (finger-tree->list (list->finger-tree madd mget lst)))))
+
+  ;; pseudoset-finger-tree-find
+  (let ((find (cute pseudoset-finger-tree-find kcmp kget fn <> identity false-thunk)))
+    (do ((i 0 (+ 1 i)))
+	((= i 10))
+      (test i (find i))
+      (test #f (find (- i 0.5)))
+      (test #f (find (+ i 0.5)))))
+
+  ;; pseudoset-finger-tree-update
+  (do ((i 0 (+ 1 i)))
+      ((= i n))
+
+    (let ((epsilon (+ i 0.5)))
+
+      ;; ignore absent element
+      (test #false
+	    (pseudoset-finger-tree-update kcmp kget fn epsilon
+					  (lambda (e replace remove)
+					    #true)
+					  (lambda (insert)
+					    #false)))
+
+      ;; insert absent element
+      (test (sort-numbers (cons epsilon ln))
+	    (finger-tree->list
+	     (pseudoset-finger-tree-update kcmp kget fn epsilon
+					   (lambda (e replace remove)
+					     (error "unexpected state"))
+					   (lambda (insert)
+					     (insert)))))
+
+      ;; delete element
+      (test (remove (cute = i <>) ln)
+	    (finger-tree->list
+	     (pseudoset-finger-tree-update kcmp kget fn i
+					   (lambda (e replace remove)
+					     (remove))
+					   (lambda (insert)
+					     (error "unexpected state")))))
+
+      ;; replace element
+      (test (map (lambda (x)
+		   (if (= x i)
+		       epsilon
+		       x))
+		 ln)
+	    (finger-tree->list
+	     (pseudoset-finger-tree-update kcmp kget fn i
+					   (lambda (e replace remove)
+					     (replace epsilon))
+					   (lambda (insert)
+					     (error "unexpected state")))))
+    
+      ))
+  ;; TODO
+
+  ;; set-theoretic procedures
+  (define (lset<binary x y)
+    (and (lset<= = x y)
+	 (not (lset= = x y))))
+  (define (lset< x y z)
+    (and (lset<binary x y) (lset<binary y z)))
+
+  (let ((powerset (fold (lambda (x subsets)
+			  (append subsets
+				  (map (lambda (set)
+					 (append set (list x)))
+				       subsets)))
+			'(())
+			(iota 3))))
+
+    (for-each
+     (lambda (a)
+       (for-each
+	(lambda (b)
+	  (for-each
+	   (lambda (c)
+	     (let ((fa (list->finger-tree madd mget a))
+		   (fb (list->finger-tree madd mget b))
+		   (fc (list->finger-tree madd mget c)))
+	       
+	       (test (lset< a b c)
+		     (pseudoset-finger-tree<? kcmp kget fa fb fc))
+
+	       (test (lset<= = a b c)
+		     (pseudoset-finger-tree<=? kcmp kget fa fb fc))
+
+	       (test (lset= = a b c)
+		     (pseudoset-finger-tree=? kcmp kget fa fb fc))
+
+	       (test (lset<= = c b a)
+		     (pseudoset-finger-tree>=? kcmp kget fa fb fc))
+
+	       (test (lset< c b a)
+		     (pseudoset-finger-tree>? kcmp kget fa fb fc))
+
+	       (test (sort-numbers (lset-union = a b c))
+		     (finger-tree->list
+		      (pseudoset-finger-tree-union merge-common kcmp kget fa fb fc)))
+
+	       (test (sort-numbers (lset-intersection = a b c))
+		     (finger-tree->list
+		      (pseudoset-finger-tree-intersection merge-common kcmp kget fa fb fc)))
+
+	       (test (sort-numbers (lset-difference = a b c))
+		     (finger-tree->list
+		      (pseudoset-finger-tree-difference kcmp kget fa fb fc)))
+
+	       (test (sort-numbers (lset-xor = a b))
+		     (finger-tree->list
+		      (pseudoset-finger-tree-xor kcmp kget fa fb)))
+
+	       ))
+
+	   powerset))
+	powerset))
+     powerset))
 
   ) ;; let
