@@ -1,336 +1,233 @@
 
 (import
- (chibi loop)
  (chibi test)
  (comparators)
- (iset)
+ (generators)
+ (immutable set)
  (scheme base)
  (scheme write)
  (selector)
  (srfi 1)
- (srfi 8)
- (srfi 26)
- (srfi 95)
- (util))
+ (srfi 26))
 
-(define n 8)
+(let* ((cmp number-comparator)
+       (s0 (iset cmp))
+       (l3 '(2 4 6))
+       (s3 (iset cmp 6 4 2))
+       (always-false (lambda () #f))
+       (at-least-3 (cute >= <> 3))
+       (add1 (cute + 1 <>)))
 
-(define (list-set=? . lists)
-  (boolean (apply lset= = lists)))
-(define (list-set<=? . lists)
-  (boolean (apply lset<= = lists)))
-(define (list-set<? left right . rest)
-  (and (list-set<=? left right)
-       (not (list-set=? left right))
-       (or (null? rest)
-	   (apply list-set<? right (car rest) (cdr rest)))))
-(define (list-set>=? . lists)
-  (apply list-set<=? (reverse lists)))
-(define (list-set>? . lists)
-  (apply list-set<? (reverse lists)))
+  ;; iset
+  (test '() (iset->list s0))
+  (test '(2 4 6) (iset->list s3))
 
-(define (test-list-set=? a b)
-  (test-assert (list-set=? a b)))
+  ;; iset-tabulate
+  (test '(1 4 9)
+	(iset->list
+	 (iset-tabulate cmp
+			3
+			(lambda (i)
+			  (expt (+ 1 i) 2)))))
 
-;; iset
-;; empty with default comparator and selector
-(define empty (iset))
-(test-assert (iset? empty))
-(test-assert (iset-empty? empty))
-(test-assert (eq? default-comparator (iset-comparator empty)))
-(test-assert (eq? left-selector (iset-selector empty)))
-;; comparator, selector overrides
-(let ((set (iset number-comparator 1 2 3)))
-  (test-assert (iset? set))
-  (test '(1 2 3) (iset->ordered-list set))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? left-selector (iset-selector set))))
-(let ((set (iset right-selector 1 2 3)))
-  (test-assert (iset? set))
-  (test '(1 2 3) (iset->ordered-list set))
-  (test-assert (eq? default-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set))))
-(let ((set (iset number-comparator right-selector 1 2 3)))
-  (test-assert (iset? set))
-  (test '(1 2 3) (iset->ordered-list set))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set))))
-(let ((set (iset right-selector number-comparator 1 2 3)))
-  (test-assert (iset? set))
-  (test '(1 2 3) (iset->ordered-list set))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set))))
-(let ((like (iset number-comparator right-selector)))
-  (test-assert (eq? number-comparator (iset-comparator like)))
-  (test-assert (eq? right-selector (iset-selector like)))
-  (let ((set (iset like 1 2 3)))
-    (test-assert (iset? set))
-    (test '(1 2 3) (iset->ordered-list set))
-    (test-assert (eq? number-comparator (iset-comparator set)))
-    (test-assert (eq? right-selector (iset-selector set))))
-  (let ((set (iset like integer-comparator 1 2 3)))
-    (test-assert (iset? set))
-    (test '(1 2 3) (iset->ordered-list set))
-    (test-assert (eq? integer-comparator (iset-comparator set)))
-    (test-assert (eq? right-selector (iset-selector set))))
-  (let ((set (iset like left-selector 1 2 3)))
-    (test-assert (iset? set))
-    (test '(1 2 3) (iset->ordered-list set))
-    (test-assert (eq? number-comparator (iset-comparator set)))
-    (test-assert (eq? left-selector (iset-selector set)))))
-;; nonempty
-(define three (iset 1 2 3))
-(test-assert (iset? three))
-(test 3 (iset-size three))
-(test '(1 2 3) (iset->ordered-list three))
-;; removes duplicates
-(test '(1 2 3) (iset->ordered-list (iset 1 2 2 3 3 3 3 1 2)))
+  ;; iset-unfold
+  (test '(-2 -1 0)
+	(iset->list
+	 (iset-unfold cmp
+		      (cute = 3 <>)
+		      (cute - <>)
+		      (cute + <> 1)
+		      0)))
 
-;; iset?
-(test-assert (iset? empty))
-(test-assert (iset? three))
-(test-not (iset? '(1 2 3)))
+  ;; iset?
+  (test #t (iset? s0))
+  (test #t (iset? s3))
+  (test #f (iset? '()))
 
-;; iset-comparator
-(test-assert (comparator? (iset-comparator three)))
+  ;; iset-empty?
+  (test #t (iset-empty? s0))
+  (test #f (iset-empty? s3))
 
-;; iset-selector
-(test-assert (selector? (iset-selector three)))
+  ;; iset-member?
+  (test #f (iset-member? s0 1))
+  (test #f (iset-member? s3 1))
+  (test #t (iset-member? s3 2))
+  (test #f (iset-member? s3 3))
+  (test #t (iset-member? s3 4))
+  (test #f (iset-member? s3 5))
+  (test #t (iset-member? s3 6))
+  (test #f (iset-member? s3 7))
 
-;; iset-empty?
-(test-assert (iset-empty? empty))
-(test-not (iset-empty? three))
+  ;; iset-min
+  (test-error (iset-min s0))
+  (test 2 (iset-min s3))
 
-;; iset-size
-(test-assert 0 (iset-size empty))
-(test-assert 3 (iset-size three))
+  ;; iset-max
+  (test-error (iset-max s0))
+  (test 6 (iset-max s3))
 
-;; iset-difference
-;; iset-intersection
-;; iset-union
-;; iset-xor
-;; iset<?
-;; iset<=?
-;; iset=?
-;; iset>=?
-;; iset>?
-;; tricky special cases
-(test-assert (iset<? (iset) (iset 0)))
-(test-assert (iset<? (iset 0) (iset 1 0)))
-(test-assert (list-set<? '() '(0) '(1 0)))
-(test-assert (iset<? (iset) (iset 0) (iset 1 0)))
-(test (list-set<? '() '(0) '(1 0))
-      (iset<? (iset) (iset 0) (iset 1 0)))
-;; exhaustive tests
-(let ((U (powerset n)))
-  (loop ((for a (in-list U)))
-    (loop ((for b (in-list U)))
-      (let ((as (list->iset a))
-	    (bs (list->iset b)))
+  ;; iset-comparator
+  (test-assert (eqv? number-comparator (iset-comparator s3)))
 
-	;; binary relations
-	(test (list-set<?  a b) (iset<?  as bs))
-	(test (list-set<=? a b) (iset<=? as bs))
-	(test (list-set=?  a b) (iset=?  as bs))
-	(test (list-set>=? a b) (iset>=? as bs))
-	(test (list-set>?  a b) (iset>?  as bs))
+  ;; iset-predecessor
+  ;; iset-successor
+  ;; TODO
+  
+  ;; iset-adjoin
+  (let ((s (iset-adjoin s0 7)))
+    (test '(7) (iset->list s))
+    (test 1 (iset-size s)))
+  (let ((s (iset-adjoin s3 1)))
+    (test '(1 2 4 6) (iset->list s))
+    (test 4 (iset-size s)))
+  (let ((s (iset-adjoin s3 2)))
+    (test '(2 4 6) (iset->list s))
+    (test 3 (iset-size s)))
 
-	;; binary operations
-	(test-list-set=? (lset-difference = a b)
-			 (iset->ordered-list (iset-difference as bs)))
-	(test-list-set=? (lset-intersection = a b)
-			 (iset->ordered-list (iset-intersection as bs)))
-	(test-list-set=? (lset-union = a b)
-			 (iset->ordered-list (iset-union as bs)))
-	(test-list-set=? (lset-xor = a b)
-			 (iset->ordered-list (iset-xor as bs)))
+  ;; iset-adjoin-all
+  (let ((s (iset-adjoin-all s3 '(8 -4 4))))
+    (test '(-4 2 4 6 8) (iset->list s))
+    (test 5 (iset-size s)))
 
-	(loop ((for c (in-list U)))
-	  (let ((cs (list->iset c)))
-	    
-	    ;; trinary relations
-	    (test (list-set<?  a b c) (iset<?  as bs cs)) ;; failing
-	    (test (list-set<=? a b c) (iset<=? as bs cs))
-	    (test (list-set=?  a b c) (iset=?  as bs cs))
-	    (test (list-set>=? a b c) (iset>=? as bs cs))
-	    ;;(test (list-set>?  a b c) (iset>?  as bs cs)) ;; failing
+  ;; iset-replace
+  ;; effectual
+  (let ((s (iset-replace s3 1)))
+    (test '(1 2 4 6) (iset->list s))
+    (test 4 (iset-size s)))
+  ;; ineffectual
+  (let ((s (iset-replace s3 4)))
+    (test '(2 4 6) (iset->list s))
+    (test 3 (iset-size s)))
 
-	    (let ((x (list-set<? a b c))
-		  (y (iset<? as bs cs)))
-	      (unless (equal? x y)
-		      (newline)
-		      (display a)
-		      (display b)
-		      (display c)
-		      (display x)
-		      (display " vs ")
-		      (display y)
-		      (newline)))
+  ;; iset-delete
+  ;; effectual
+  (let ((s (iset-delete s3 4)))
+    (test '(2 6) (iset->list s))
+    (test 2 (iset-size s)))
+  ;; ineffectual
+  (let ((s (iset-delete s3 5)))
+    (test '(2 4 6) (iset->list s3))
+    (test 3 (iset-size s)))
 
-	    ;; trinary operations
-	    (test-list-set=? (lset-difference = a b c)
-			     (iset->ordered-list (iset-difference as bs cs)))
-	    (test-list-set=? (lset-intersection = a b c)
-			     (iset->ordered-list (iset-intersection as bs cs)))
-	    (test-list-set=? (lset-union = a b c)
-			     (iset->ordered-list (iset-union as bs cs)))
-	    (test-list-set=? (lset-xor = a b c)
-			     (iset->ordered-list (iset-xor as bs cs)))))))))
+  ;; iset-delete-elements
+  ;; effectual
+  (let ((s (iset-delete-elements s3 '(5 4))))
+    (test '(2 6) (iset->list s))
+    (test 2 (iset-size s)))
+  ;; ineffectual
+  (let ((s (iset-delete-elements s3 '(5 1 3))))
+    (test '(2 4 6) (iset->list s))
+    (test 3 (iset-size s)))
 
-(loop ((for elts (in-list (powerset n))))
-      (let ((set (list->iset elts)))
-	(loop ((for x (in-list elts)))
-	      ;; iset-member?
-	      (test (boolean (member x elts)) (iset-member? set x))
+  ;; iset-find
+  ;; success
+  (test 2 (iset-find s3 2 always-false))
+  (test 4 (iset-find s3 4 always-false))
+  (test 6 (iset-find s3 6 always-false))
+  ;; failure
+  (test #f (iset-find s3 1 always-false))
+  (test #f (iset-find s3 3 always-false))
+  (test #f (iset-find s3 5 always-false))
+  (test #f (iset-find s3 7 always-false))
 
-	      ;; iset-min
-	      ;; iset-max
-	      (test (apply min elts) (iset-min set))
-	      (test (apply max elts) (iset-max set))
+  ;; iset-count
+  (test 3 (iset-count even? s3))
+  (test 0 (iset-count odd? s3))
 
-	      ;; iset-filter
-	      (test-list-set=? (filter even? elts)
-			       (iset->ordered-list (iset-filter even? set)))
+  ;; iset-any
+  (test #t (iset-any even? s3))
+  (test #f (iset-any odd? s3))
 
-	      ;; iset-fold
-	      (test (fold cons '() (sort elts <))
-		    (iset-fold cons '() set))
+  ;; iset-every
+  (test #t (iset-every even? s3))
+  (test #f (iset-every odd? s3))
 
-	      ;; iset-map/nondecreasing
-	      (test-list-set=? (map add1 elts)
-			       (iset->ordered-list
-				(iset-map/nondecreasing add1 set)))
+  ;; iset-range=
+  ;; iset-range<
+  ;; iset-range>
+  ;; iset-range<=
+  ;; iset-range>=
+  ;; TODO
 
-	      ;; iset-map
-	      (let ((halve (cute quotient <> 2)))
-		(test-list-set=? (map halve elts)
-				 (iset->ordered-list
-				  (iset-map halve set)))))
+  ;; iset-filter
+  (test '(4 6)
+	(iset->list (iset-filter at-least-3 s3)))
 
-	(loop ((for x (up-from -1 (to (add1 n)))))
-	      ;; iset-find
-	      (test (find (cute = x <>) elts)
-		    (iset-find set x (constant-thunk #false)))
+  ;; iset-remove
+  (test '(2)
+	(iset->list (iset-remove at-least-3 s3)))
 
-	      ;; iset-include
-	      (test-list-set=? (lset-adjoin = elts x)
-			       (iset->ordered-list
-				(iset-include set x)))
+  ;; iset-partition
+  (let-values (((yay nay) (iset-partition at-least-3 s3)))
+    (test '(4 6) (iset->list yay))
+    (test '(2) (iset->list nay)))
 
-	      ;; iset-exclude
-	      (test-list-set=? (lset-difference = elts (list x))
-			       (iset->ordered-list
-				(iset-exclude set x))))
+  ;; iset-fold
+  (test (fold + 0 l3)
+	(iset-fold + 0 s3))
 
-	;; iset-between
-	(loop ((for min (up-from -1 (to n))))
-	      (loop ((for max (up-from min (to (add1 n)))))
-		    ;; [min max]
-		    (test-list-set=? (filter (cute <= min <> max) elts)
-				     (iset->ordered-list
-				      (iset-between set min #t max #t)))
-		    ;; [min max)
-		    (test-list-set=? (filter (cute <= min <> (sub1 max)) elts)
-				     (iset->ordered-list
-				      (iset-between set min #t max #f)))
-		    ;; (min max]
-		    (test-list-set=? (filter (cute <= (add1 min) <> max) elts)
-				     (iset->ordered-list
-				      (iset-between set min #f max #t)))
-		    ;; (min max)
-		    (test-list-set=? (filter (cute <= (add1 min) <> (sub1 max)) elts)
-				     (iset->ordered-list
-				      (iset-between set min #f max #f)))
+  ;; iset-fold-right
+  (test (fold-right cons '() l3)
+	(iset-fold-right cons '() s3))
 
+  ;; iset-map/monotone
+  ;; same comparator
+  (test '(3 5 7)
+	(iset->list (iset-map/monotone add1 s3)))
+  ;; new comparator
+  (test '(2.0 4.0 6.0)
+	(iset->list (iset-map/monotone inexact s3 real-comparator)))
 
-		    ))))
+  ;; iset-map
+  ;; monotone tests work
+  (test '(3 5 7)
+	(iset->list (iset-map add1 s3)))
+  (test '(2.0 4.0 6.0)
+	(iset->list (iset-map inexact s3 real-comparator)))
+  ;; non-monotone
+  (test '(-6 -4 -2)
+	(iset->list (iset-map - s3)))
 
-;; iset->ordered-list
-;; list->iset
-;; ordered-list->iset
-(loop ((for k (up-from 0 (to 100))))
-  (let* ((lst (iota k))
-	 (ord (ordered-list->iset lst))
-	 (unord (list->iset (append lst lst))))
-    (test-assert (iset? ord))
-    (test-assert (iset? unord))
-    (test lst (iset->ordered-list ord))
-    (test lst (iset->ordered-list unord))))
-;; list->iset overrides
-(let ((set (list->iset '(1 2 3))))
-  (test-assert (eq? default-comparator (iset-comparator set)))
-  (test-assert (eq? left-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-(let ((set (list->iset number-comparator '(1 2 3))))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? left-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-(let ((set (list->iset right-selector '(1 2 3))))
-  (test-assert (eq? default-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-(let ((set (list->iset (iset number-comparator right-selector) '(1 2 3))))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-;; ordered-list->iset overrides
-(let ((set (ordered-list->iset '(1 2 3))))
-  (test-assert (eq? default-comparator (iset-comparator set)))
-  (test-assert (eq? left-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-(let ((set (ordered-list->iset number-comparator '(1 2 3))))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? left-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-(let ((set (ordered-list->iset right-selector '(1 2 3))))
-  (test-assert (eq? default-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
-(let ((set (ordered-list->iset (iset number-comparator right-selector) '(1 2 3))))
-  (test-assert (eq? number-comparator (iset-comparator set)))
-  (test-assert (eq? right-selector (iset-selector set)))
-  (test '(1 2 3) (iset->ordered-list set)))
+  ;; iset-for-each
+  (let ((sum 0))
+    (iset-for-each (lambda (x)
+		     (set! sum (+ sum x)))
+		   s3)
+    (test 12 sum))
 
-;; iset-include and iset-exclude track min, max, and size correctly
-(define (test-metadata inf lst set)
-  (let ((n (length lst)))
-    (test-list-set=? lst (iset->ordered-list set))
-    (test n (iset-size set))
-    (when (positive? n)
-	  (test (fold min inf lst) (iset-min set))
-	  (test (fold max -1 lst) (iset-max set)))))
+  ;; iset=?
+  ;; iset<?
+  ;; iset>?
+  ;; iset<=?
+  ;; iset>=?
+  ;; iset-union
+  ;; iset-intersection
+  ;; iset-difference
+  ;; iset-xor
+  ;; TODO
 
-(define (test-include+exclude perm)
-  (let* ((n (length perm))
-	 (inf (add1 n)))
-    ;; insert from empty
-    (let loop ((lst '())
-	       (set (iset))
-	       (perm perm))
-      (test-metadata inf lst set)
-      (unless (null? perm)
-	      (receive (x perm) (car+cdr perm)
-		       (loop (lset-adjoin = lst x)
-			     (iset-include set x)
-			     perm))))
-    ;; delete from full
-    (let ((everything (iota (length perm))))
-      (let loop ((lst everything)
-		 (set (ordered-list->iset everything))
-		 (perm perm))
-	(test-metadata inf lst set)
-	(unless (null? perm)
-		(receive (x perm) (car+cdr perm)
-			 (loop (lset-difference = lst (list x))
-			       (iset-exclude set x)
-			       perm)))))))
+  ;; iset->list
+  (test '() (iset->list s0))
+  (test '(2 4 6) (iset->list s3))
 
-;; All elements are distinct.
-(for-each test-include+exclude (pseudorandom-permutations n 100 0))
+  ;; increasing-list->iset
+  (test '(1 2 3)
+	(iset->list (increasing-list->iset cmp '(1 2 3))))
 
-;; Repeated elements.
-(for-each (lambda (perm1 perm2)
-	    (test-include+exclude (append perm1 perm2)))
-	  (pseudorandom-permutations n 100 0)
-	  (pseudorandom-permutations n 20 0))
+  ;; list->iset
+  (test '(1 2 3)
+	(iset->list (list->iset cmp '(3 2 1))))
 
+  ;; iset->generator
+  (test '(2 4 6)
+	(generator->list (iset->generator s3)))
+
+  ;; increasing-generator->iset
+  (test '(1 2 3)
+	(iset->list (increasing-generator->iset cmp (make-generator 1 2 3))))
+
+  ;; generator->iset
+  (test '(1 2 3)
+	(iset->list (generator->iset cmp (make-generator 3 2 1))))
+  
+  ) ; let

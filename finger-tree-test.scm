@@ -392,6 +392,12 @@
       ))
   ;; TODO
 
+  ;; increasing-generator->pseudoset-finger-tree
+  (test '(1 2 3 4 5)
+	(finger-tree->list
+	 (increasing-generator->pseudoset-finger-tree
+	  (make-generator 1 2 3 4 5))))
+  
   ;; set-theoretic procedures
   (define (lset<binary x y)
     (and (lset<= = x y)

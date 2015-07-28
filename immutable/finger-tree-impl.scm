@@ -843,3 +843,6 @@
 
 (define (pseudoset-finger-tree-xor kcmp kget left right)
   (pseudoset-binary-operation #true #true #false kcmp kget left right))
+
+(define (increasing-generator->pseudoset-finger-tree gen)
+  (generator->finger-tree pseudoset-madd pseudoset-mget gen))

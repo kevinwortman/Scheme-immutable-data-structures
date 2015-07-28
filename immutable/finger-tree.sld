@@ -40,6 +40,7 @@
    pseudoset-finger-tree-union
    pseudoset-finger-tree-intersection
    pseudoset-finger-tree-difference
-   pseudoset-finger-tree-xor)
-
+   pseudoset-finger-tree-xor
+   increasing-generator->pseudoset-finger-tree)
+  
   (include "finger-tree-impl.scm"))
