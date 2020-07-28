@@ -10,6 +10,13 @@
 	    (set! list (cdr list))
 	    obj)))))
 
+(define (gmap proc generator)
+  (lambda ()
+    (let ((value (generator)))
+      (if (eof-object? value)
+          value
+          (proc value)))))
+
 (define (vector->generator vect)
   (gmap (cute vector-ref vect <>)
 	(make-range-generator 0 (vector-length vect))))
@@ -255,7 +262,7 @@
       (if (digit-nonfull? l)
 	  ;; May safely add another element to the left digit.
 	  (make-deep (digit-add-front l obj) sp r)
-	  
+
 	  ;; Can't do that, so pull 3 elements out of the left
 	  ;; digit, turn them into a node, and push them into the
 	  ;; spine; that leaves the fourth digit element, and the
@@ -563,7 +570,7 @@
 				      (match m-prefix e)
 				      (rloop (+ 1 i) m-e)))
 				(absent m-prefix))))))))))))
-			  
+
 (define (finger-tree-scan/context madd mget mpred mseed tree match absent)
   (let recurse ((mget mget)
 		(m-prefix mseed)
@@ -750,9 +757,9 @@
      ((empty? right)
       #false)
      (else
-      (if3 (comparator-compare kcmp
-			       (kget (finger-tree-front left))
-			       (kget (finger-tree-front right)))
+      (comparator-if<=> kcmp
+                        (kget (finger-tree-front left))
+                        (kget (finger-tree-front right))
 	   #false
 	   (loop (finger-tree-remove-front left)
 		 (finger-tree-remove-front right))
@@ -768,16 +775,16 @@
      ((empty? right)
       #false)
      (else
-      (if3 (comparator-compare kcmp
-			       (kget (finger-tree-front left))
-			       (kget (finger-tree-front right)))
+      (comparator-if<=> kcmp
+                        (kget (finger-tree-front left))
+                        (kget (finger-tree-front right))
 	   #false
 	   (loop (finger-tree-remove-front left)
 		 (finger-tree-remove-front right)
 		 right-has-something-extra)
 	   (loop left
 		 (finger-tree-remove-front right)
-		 #true))))))	   
+		 #true))))))
 
 (define (pseudoset-finger-tree>? kcmp kget . trees)
   (apply pseudoset-finger-tree<? kcmp kget (reverse! trees)))
@@ -806,7 +813,7 @@
        (else
 	(let ((l (finger-tree-front left))
 	      (r (finger-tree-front right)))
-	  (if3 (comparator-compare kcmp (kget l) (kget r))
+	  (comparator-if<=> kcmp (kget l) (kget r)
 	       (loop (finger-tree-remove-front left)
 		     right
 		     (if keep-distinct-left

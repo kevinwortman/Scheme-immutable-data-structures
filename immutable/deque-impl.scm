@@ -30,7 +30,7 @@
   (when (> n (ideque-length deque))
     (underflow-error)))
 
-(define check-nonempty (cute check-length <> 1))  
+(define check-nonempty (cute check-length <> 1))
 
 (define (length+generator->ideque length gen)
   (make-ideque length
@@ -125,6 +125,14 @@
 
 ;; TODO ideque-zip
 
+;; TODO: for some reason gmap is not visible here...
+(define (gmap proc generator)
+  (lambda ()
+    (let ((value (generator)))
+      (if (eof-object? value)
+          value
+          (proc value)))))
+
 (define (ideque-map proc first . rest)
   (generator->ideque (apply gmap proc (map! ideque->generator (cons first rest)))))
 
@@ -212,10 +220,10 @@
   (reverse-finger-tree->generator (ideque-tree deque)))
 
 (define (make-ideque-comparator comparator)
-  (make-listwise-comparator ideque?
-			    comparator
-			    ideque-empty?
-			    ideque-front
-			    ideque-remove-front))
+  (make-list-comparator ideque?
+                        comparator
+                        ideque-empty?
+                        ideque-front
+                        ideque-remove-front))
 
 (define ideque-comparator (make-ideque-comparator default-comparator))

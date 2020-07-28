@@ -2,8 +2,8 @@
 
 (define-library (immutable set)
   (import
-   (comparators)
-   (generators)
+   (scheme comparator)
+   (scheme generator)
    (immutable finger-tree)
    (scheme base)
    (scheme case-lambda)
