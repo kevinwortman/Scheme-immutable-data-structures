@@ -5,7 +5,7 @@ chibi:
 	mkdir -p local/src
 	cd local/src && (git clone --depth=1 https://github.com/ashinn/chibi-scheme/ || git pull)
 	cd local/src/chibi-scheme/ && make
-	cd local/src/chibi-scheme/ && make install
+	cd local/src/chibi-scheme/ && sudo make install
 
 init: chibi  ## Compile chibi from source and install it!
 
