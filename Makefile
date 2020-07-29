@@ -10,6 +10,6 @@ chibi:
 init: chibi  ## Compile chibi from source and install it!
 
 check:   ## Run tests
-	./venv chibi-scheme finger-tree-test.scm
-	./venv chibi-scheme iset-test.scm
-	./venv chibi-scheme ideque-test.scm
+	chibi-scheme finger-tree-test.scm
+	chibi-scheme iset-test.scm
+	chibi-scheme ideque-test.scm
