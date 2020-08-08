@@ -1,7 +1,7 @@
 
 (import
  (chibi test)
- (generators)
+ (scheme generator)
  (immutable deque)
  (scheme base)
  (scheme write) ; TODO: remove

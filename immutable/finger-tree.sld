@@ -2,8 +2,8 @@
 
 (define-library (immutable finger-tree)
   (import
-   (comparators)
-   (generators)
+   (scheme comparator)
+   (scheme generator)
    (scheme base)
    (scheme case-lambda)
    (scheme lazy)
@@ -42,5 +42,5 @@
    pseudoset-finger-tree-difference
    pseudoset-finger-tree-xor
    increasing-generator->pseudoset-finger-tree)
-  
+
   (include "finger-tree-impl.scm"))

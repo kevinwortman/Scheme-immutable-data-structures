@@ -2,8 +2,8 @@
 
 (define-library (immutable deque)
   (import
-   (comparators)
-   (generators)
+   (scheme comparator)
+   (scheme generator)
    (immutable finger-tree)
    (scheme base)
    (srfi 1)

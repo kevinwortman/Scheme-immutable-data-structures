@@ -1,14 +1,18 @@
 
 (import
  (chibi test)
- (comparators)
- (generators)
+ (scheme comparator)
+ (scheme generator)
  (immutable set)
  (scheme base)
  (scheme write)
  (selector)
  (srfi 1)
  (srfi 26))
+
+(define number-comparator
+  (make-comparator real? = < (lambda (x . o) (exact (abs (round x))))))
+
 
 (let* ((cmp number-comparator)
        (s0 (iset cmp))
@@ -72,7 +76,7 @@
   ;; iset-predecessor
   ;; iset-successor
   ;; TODO
-  
+
   ;; iset-adjoin
   (let ((s (iset-adjoin s0 7)))
     (test '(7) (iset->list s))
@@ -224,10 +228,10 @@
 
   ;; increasing-generator->iset
   (test '(1 2 3)
-	(iset->list (increasing-generator->iset cmp (make-generator 1 2 3))))
+	(iset->list (increasing-generator->iset cmp (list->generator '(1 2 3)))))
 
   ;; generator->iset
   (test '(1 2 3)
-	(iset->list (generator->iset cmp (make-generator 3 2 1))))
-  
+	(iset->list (generator->iset cmp (list->generator '(3 2 1)))))
+
   ) ; let

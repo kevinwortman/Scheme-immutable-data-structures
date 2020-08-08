@@ -1,14 +1,17 @@
 
 (import
  (chibi test)
- (comparators)
- (generators)
+ (scheme comparator)
+ (scheme generator)
  (immutable finger-tree)
  (scheme base)
  (scheme write) ; TODO: remove
  (srfi 1)
  (srfi 26)
  (srfi 95))
+
+(define number-comparator
+  (make-comparator real? = < (lambda (x . o) (exact (abs (round x))))))
 
 (let* ((n 100) ; moderately large n
 
@@ -172,7 +175,7 @@
   (test '(1 2 3 4 5) (to-list (finger-tree-remove-back f6)))
   (test '(1 2 3 4 5 6) (to-list (finger-tree-remove-back f7)))
   (test '(1 2 3 4 5 6 7) (to-list (finger-tree-remove-back f8)))
-  (test '(1 2 3 4 5 6 7 8) (to-list (finger-tree-remove-back f9)))  
+  (test '(1 2 3 4 5 6 7 8) (to-list (finger-tree-remove-back f9)))
 
   ;; finger-tree-append
   (test-assert (procedure? finger-tree-append))
@@ -273,7 +276,7 @@
 			(test-values (values pre e suf) (scan/ctx tree query)))))
 
     (trial/absent f0 1)
-  
+
     (trial/match '() 1 '() f1 1)
     (trial/absent f1 2)
 
@@ -309,7 +312,7 @@
   ;; finger-tree->generator
   ;; (nontrivial cases are covered by the list conversion procedures below)
   (test-assert (procedure? generator->finger-tree))
-  (test '(1 2 3) (to-list (generator->finger-tree madd mget (make-generator 1 2 3))))
+  (test '(1 2 3) (to-list (generator->finger-tree madd mget (list->generator '(1 2 3)))))
   (test-assert (procedure? finger-tree->generator))
   (test '(1 2 3) (generator->list (finger-tree->generator f3)))
 
@@ -388,7 +391,7 @@
 					     (replace epsilon))
 					   (lambda (insert)
 					     (error "unexpected state")))))
-    
+
       ))
   ;; TODO
 
@@ -396,8 +399,8 @@
   (test '(1 2 3 4 5)
 	(finger-tree->list
 	 (increasing-generator->pseudoset-finger-tree
-	  (make-generator 1 2 3 4 5))))
-  
+	  (list->generator '(1 2 3 4 5)))))
+
   ;; set-theoretic procedures
   (define (lset<binary x y)
     (and (lset<= = x y)
@@ -422,7 +425,7 @@
 	     (let ((fa (list->finger-tree madd mget a))
 		   (fb (list->finger-tree madd mget b))
 		   (fc (list->finger-tree madd mget c)))
-	       
+
 	       (test (lset< a b c)
 		     (pseudoset-finger-tree<? kcmp kget fa fb fc))
 
