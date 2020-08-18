@@ -6,7 +6,6 @@
  (immutable set)
  (scheme base)
  (scheme write)
- (selector)
  (srfi 1)
  (srfi 26))
 
