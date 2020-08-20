@@ -25,18 +25,18 @@
 
 ;; make-measure
 (test-assert (procedure? make-measure))
-(test-assert (measure? (make-measure car +)))
+(test-assert (measure? (make-measure car + 0)))
 
 ;; measure?
 (test-assert (procedure? measure?))
-(test #t (measure? (make-measure car +)))
+(test #t (measure? (make-measure car + 0)))
 (test #f (measure? 7))
 
 ;; measure-get-proc
 ;; measure-add-proc
 (test-assert (procedure? measure-get-proc))
 (test-assert (procedure? measure-add-proc))
-(let ((meas (make-measure 'a 'b)))
+(let ((meas (make-measure 'a 'b 0)))
   (test 'a (measure-get-proc meas))
   (test 'b (measure-add-proc meas)))
 
@@ -46,12 +46,11 @@
 (test-assert (procedure? measure-get))
 (test-assert (procedure? measure-add))
 (test-assert (procedure? measure-get+add))
-(let ((meas (make-measure car +)))
+(let ((meas (make-measure car + 0)))
   (test 5 (measure-get meas '(5 6)))
   (test 7 (measure-add meas 3 4)) ;; 2 measures
   (test 12 (measure-add meas 3 4 5)) ;; 3 measures
   (test 15 (measure-get+add meas 10 '(5 6))))  
-
 (let* ((n 100) ; moderately large n
 
        (order (make-set-order (lambda (x) x)
@@ -76,7 +75,7 @@
   ;; make-finger-tree
   (test-assert (procedure? make-finger-tree))
   (test-assert (finger-tree-empty? (make-finger-tree)))
-  
+
   ;; finger-tree
   (test-assert (procedure? finger-tree))
   (test '() (to-list f0))
@@ -271,7 +270,6 @@
 		 (test expect
 		       (finger-tree-scan meas
 					 (cute >= <> query)
-					 0
 					 tree
 					 (lambda (m match)
 					   match)
@@ -303,20 +301,19 @@
 
   ;; finger-tree-bisect
   (test-assert (procedure? finger-tree-bisect))
-  (let* ((scan/ctx (lambda (tree query)
-		     (finger-tree-bisect meas
-					 (cute >= <> query)
-					 0
-					 tree
-					 (lambda (m pre suf)
-					   (values (to-list pre)
-						   (to-list suf)))
-					 (lambda (m)
-					   #f))))
+  (let* ((bisect (lambda (tree query)
+		   (finger-tree-bisect meas
+				       (cute >= <> query)
+				       tree
+				       (lambda (m pre suf)
+					 (values (to-list pre)
+						 (to-list suf)))
+				       (lambda (m)
+					 #f))))
 	 (trial/absent (lambda (tree query)
-			 (test #f (scan/ctx tree query))))
+			 (test #f (bisect tree query))))
 	 (trial/match (lambda (pre suf tree query)
-			(test-values (values pre suf) (scan/ctx tree query)))))
+			(test-values (values pre suf) (bisect tree query)))))
 
     (trial/absent f0 1)
 
@@ -739,3 +736,4 @@
 	 (finger-tree-set-replace order set '(3 9)))))
 
 (test-exit)
+

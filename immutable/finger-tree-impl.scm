@@ -17,11 +17,19 @@
 ;; 1) measure (exported)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Note that add-proc is always called on two measurements like
+;;   (add-proc l r)
+;; where l and r are measurement values, and l comes from an element
+;; left of r in the tree. This order allows some simplifications. For
+;; example an add-proc that takes the maximum of elements in an
+;; increasing sequence could just define add-proc as (lambda (l r) r)
+;; since a right element is always greater than its left neighbor.
 (define-record-type <measure>
-  (make-measure get-proc add-proc)
+  (make-measure get-proc add-proc zero)
   measure?
   (get-proc measure-get-proc)
-  (add-proc measure-add-proc))
+  (add-proc measure-add-proc)
+  (zero measure-zero))
 
 (define (measure-get meas elt)
   ((measure-get-proc meas) elt))
@@ -213,11 +221,12 @@
   (make-deep (digit x) *empty-promise* (digit y)))
 
 ;; Convert a measure for elements into a measure for spine nodes.  The
-;; returned measure uses the same add-proc, and uses node-m as the
-;; get-proc.
+;; returned measure uses the same add-proc and zero, but uses node-m
+;; as the get-proc.
 (define (measure-spine elt-measure)
   (make-measure node-m
-		(measure-add-proc elt-measure)))
+		(measure-add-proc elt-measure)
+		(measure-zero elt-measure)))
 
 ;; Create a node3 from three elements, and add it to the left side of
 ;; the spine.
@@ -428,8 +437,6 @@
 	    (match m/y
 		   (make-deep left (delay spine-prefix) (digit x y))
 		   (make-deep (digit z) (delay spine-suffix) right))))))))
-
-(define *set-mzero* #f) ; unused
 
 (define (make-set-pred order key)
   (lambda (m)
@@ -759,11 +766,15 @@
 ;; analogous to a search operation. In a vector-like tree, scan is
 ;; analogous to vector-ref.
 ;;
-;; A scan works like a fold that accumulates a measurement value that
-;; is initially mzero. Elements are visited in left-to-right
-;; order. Each element is measured, and that measurement is added to
-;; the accumulated measurement. The element counts as a match if
-;; (mpred <accumulated-measure>) yields true.
+;; A scan works like a fold that accumulates a measurement value,
+;; starting from (measurement-zero meas). Elements are visited in
+;; left-to-right order. Each element is measured, and that measurement
+;; is added to the accumulated measurement. The element counts as a
+;; match if (mpred <accumulated-measure>) yields true. mpred must be
+;; *monotone* in the sense that it is false for very low measurments,
+;; true for very high measurements, and transitions from false to true
+;; at most once. In most applications, mpred tests whether the
+;; measurement is >= some measurement value.
 ;;
 ;; On success (a match is found), calls
 ;;   (match m elt)
@@ -777,43 +788,46 @@
 ;; In many use cases these m values are unneeded and can be ignored.
 ;;
 ;; Time efficiency is O(log n).
-(define (finger-tree-scan meas mpred mzero tree match absent)
-  (match-tree tree
-    ((empty)
-     ;; empty tree, fail
-     (absent mzero))
+(define (finger-tree-scan meas mpred tree match absent)
+  (let recurse ((meas meas)
+		(zero (measure-zero meas))
+		(tree tree)
+		(match match)
+		(absent absent))
+    (match-tree tree
+     ((empty)
+      ;; empty tree, fail
+      (absent zero))
     
-    ((single a)
-     ;; one element; measure it...
-     (let ((m/a (measure-get+add meas mzero a)))
-       ;; test the predicate...
-       (if (mpred m/a)
-	   (match mzero a)   ; success!
-	   (absent m/a))))   ; fail!
+     ((single a)
+      ;; one element; measure it...
+      (let ((m/a (measure-get+add meas zero a)))
+	;; test the predicate...
+	(if (mpred m/a)
+	    (match zero a)   ; success!
+	    (absent m/a))))   ; fail!
     
-    ;; first scan the left digit
-    ((deep left spine-promise right)
-     (scan-digit meas mpred mzero left
-		 match ; success!
-		 (lambda (m/left)
-		   ;; no match in the left digit, try the spine recursively
-		   (finger-tree-scan
-		    (measure-spine meas)
-		    mpred
-		    m/left
-		    (force spine-promise)
-		    (lambda (m/pre node)
-		      ;; success in a node; find which specific element
-		      (scan-node meas mpred m/pre node match))
-		    (lambda (m/spine)
-		      ;; no match in the spine either, finally try the
-		      ;; right digit
-		      (scan-digit meas mpred m/spine right match absent))))))))
+     ;; first scan the left digit
+     ((deep left spine-promise right)
+      (scan-digit meas mpred zero left
+		  match ; success!
+		  (lambda (m/left)
+		    ;; no match in the left digit, try the spine recursively
+		    (recurse
+		     (measure-spine meas)
+		     m/left
+		     (force spine-promise)
+		     (lambda (m/pre node)
+		       ;; success in a node; find which specific element
+		       (scan-node meas mpred m/pre node match))
+		     (lambda (m/spine)
+		       ;; no match in the spine either, finally try the
+		       ;; right digit
+		       (scan-digit meas mpred m/spine right match absent)))))))))
 
 ;; Bisect a tree. This is similar to the scan operation implemented in
-;; finger-tree-scan. The definition for meas, mpred, mzero, tree, and
-;; absent are identical to finger-tree-scan. The difference is in
-;; match.
+;; finger-tree-scan. The definition for meas, mpred, tree, and absent
+;; are identical to finger-tree-scan. The difference is in match.
 ;;
 ;; On success, calls
 ;;    (match m prefix suffix)
@@ -835,53 +849,57 @@
 ;; Time efficiency is O(log n), but more expensive than
 ;; finger-tree-scan, so only use finger-tree-bisect when you actually
 ;; need the prefix or suffix.
-(define (finger-tree-bisect meas mpred mzero tree match absent)
-  (match-tree tree
+(define (finger-tree-bisect meas mpred tree match absent)
+  (let recurse ((meas meas)
+		(zero (measure-zero meas))
+		(tree tree)
+		(match match)
+		(absent absent))
+    (match-tree tree
 	    
-    ((empty) ; empty tree, failure
-     (absent mzero))
+      ((empty) ; empty tree, failure
+       (absent zero))
     
-    ((single x) ; one element, check it
-     (let ((m/x (measure-get+add meas mzero x)))
-       (if (mpred m/x)
-	   (match mzero *empty* tree) ; note prefix is empty
-	   (absent m/x))))
+      ((single x) ; one element, check it
+       (let ((m/x (measure-get+add meas zero x)))
+	 (if (mpred m/x)
+	     (match zero *empty* tree) ; note prefix is empty
+	     (absent m/x))))
     
-    ((deep left spine-promise right)
-     ;; try the left digit
-     (bisect-digit meas mpred mzero left
-		   (lambda (m vect-pre vect-suf)
-		     ;; match in the left digit; build prefix and suffix
-		     (match m
-			    (vector->finger-tree meas vect-pre)
-			    (make-deep vect-suf spine-promise right)))
-		   ;; no match in left digit, try the spine
-		   (lambda (m/left)
-		     (finger-tree-bisect
-		      (measure-spine meas)
-		      mpred
-		      m/left
-		      (force spine-promise)
-		      (lambda (m spine-prefix spine-suffix)
-			;; found a matching node; split everything
-			;; into a prefix and suffix
-			(bisect-node meas mpred
-				     m left right
-				     spine-prefix spine-suffix
-				     match))
-		      (lambda (m/spine)
-			;; no match in spine, finally try the right digit
-			(bisect-digit meas mpred m/spine right
-				      (lambda (m vect-pre vect-suf)
-					;; match in the right digit;
-					;; this time we might have to
-					;; deal with an empty vect-pre
-					(match m
-					       (if (= 0 (vector-length vect-pre))
-						   (restore-right-digit left (force spine-promise))
-						   (make-deep left spine-promise vect-pre))
-					       (vector->finger-tree meas vect-suf)))
-				      absent))))))))
+      ((deep left spine-promise right)
+       ;; try the left digit
+       (bisect-digit meas mpred zero left
+		     (lambda (m vect-pre vect-suf)
+		       ;; match in the left digit; build prefix and suffix
+		       (match m
+			      (vector->finger-tree meas vect-pre)
+			      (make-deep vect-suf spine-promise right)))
+		     ;; no match in left digit, try the spine
+		     (lambda (m/left)
+		       (recurse
+			(measure-spine meas)
+			m/left
+			(force spine-promise)
+			(lambda (m spine-prefix spine-suffix)
+			  ;; found a matching node; split everything
+			  ;; into a prefix and suffix
+			  (bisect-node meas mpred
+				       m left right
+				       spine-prefix spine-suffix
+				       match))
+			(lambda (m/spine)
+			  ;; no match in spine, finally try the right digit
+			  (bisect-digit meas mpred m/spine right
+					(lambda (m vect-pre vect-suf)
+					  ;; match in the right digit;
+					  ;; this time we might have to
+					  ;; deal with an empty vect-pre
+					  (match m
+						 (if (= 0 (vector-length vect-pre))
+						     (restore-right-digit left (force spine-promise))
+						     (make-deep left spine-promise vect-pre))
+						 (vector->finger-tree meas vect-suf)))
+					absent)))))))))
 
 (define (finger-tree-reverse meas tree)
   (generator->finger-tree meas (finger-tree->reverse-generator tree)))
@@ -1036,7 +1054,8 @@
 (define (make-set-order get-key comparator)
   (make-set-order-record (make-measure get-key
 				       (lambda (m1 m2)
-					 m2))
+					 m2)
+				       #f) ; mzero is unused
 			 comparator))
 
 (define (set-order-key order elt)
@@ -1045,7 +1064,6 @@
 (define (finger-tree-set-search order tree key match absent)
   (finger-tree-scan (set-order-measure order)
 		    (make-set-pred order key)
-		    *set-mzero*
 		    tree
 		    (lambda (m elt) ; match
 		      (if (=? (set-order-comparator order)
@@ -1079,7 +1097,6 @@
     (finger-tree-bisect
      meas
      (make-set-pred order (set-order-key order elt))
-     *set-mzero*
      tree
      (lambda (m pre suf) ; match
        (let ((x (finger-tree-left suf))
@@ -1145,7 +1162,6 @@
 (define (finger-tree-set-predecessor order tree key match absent)
   (finger-tree-bisect (set-order-measure order)
 		      (make-set-pred order key)
-		      *set-mzero*
 		      tree
 		      (lambda (m pre suf)
 			(if (finger-tree-empty? pre)
@@ -1162,7 +1178,6 @@
 (define (finger-tree-set-successor order tree key match absent)
   (finger-tree-bisect (set-order-measure order)
 		      (make-set-pred order key)
-		      *set-mzero*
 		      tree
 		      (lambda (m pre suf) ; match
 			;; suf >= key; need to find a stricly > element in suf
