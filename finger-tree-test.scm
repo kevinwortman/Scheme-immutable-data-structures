@@ -5,7 +5,6 @@
  (scheme generator)
  (immutable finger-tree)
  (scheme base)
- (scheme write)
  (srfi 1)
  (srfi 26)
  (srfi 95))
