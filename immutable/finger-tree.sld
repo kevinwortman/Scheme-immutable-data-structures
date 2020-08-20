@@ -8,7 +8,6 @@
    (scheme case-lambda)
    (scheme lazy)
    (srfi 1)
-   (srfi 8)
    (srfi 26))
 
   (export
