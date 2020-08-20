@@ -1,32 +1,44 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; outline
+;;
+;; This is a large, complex source file that implements a finger-tree data type
+;; as well as a related data type called measure.
+;;
+;; The file is organized in the following order:
+;;
+;; 1) measure (exported)
+;; 2) finger-tree (non-exported/private)
+;; 3) finger-tree (exported)
+;; 4) finger-tree-set (exported)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;; missing from the SRFI 121 reference implementation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 1) measure (exported)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (list->generator list)
-  (let ((list list))
-    (lambda ()
-      (if (null? list)
-	  (eof-object)
-	  (let ((obj (car list)))
-	    (set! list (cdr list))
-	    obj)))))
+(define-record-type <measure>
+  (make-measure get-proc add-proc)
+  measure?
+  (get-proc measure-get-proc)
+  (add-proc measure-add-proc))
 
-(define (gmap proc generator)
-  (lambda ()
-    (let ((value (generator)))
-      (if (eof-object? value)
-          value
-          (proc value)))))
+(define (measure-get meas elt)
+  ((measure-get-proc meas) elt))
 
-(define (vector->generator vect)
-  (gmap (cute vector-ref vect <>)
-	(make-range-generator 0 (vector-length vect))))
+(define measure-add
+  (case-lambda
+   ((meas m1 m2)
+    ((measure-add-proc meas) m1 m2))
+   ((meas m1 m2 m3)
+    (measure-add meas m1 (measure-add meas m2 m3)))))
 
-(define (reverse-vector->generator vect)
-  (gmap (lambda (i)
-	  (vector-ref vect (- (vector-length vect) i 1)))
-	(make-range-generator 0 (vector-length vect))))
+(define (measure-get+add meas m1 elt)
+  (measure-add meas m1 (measure-get meas elt)))
 
-;;;; data types
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 2) finger-tree (non-exported/private)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;; A finger tree may have three shapes:
 ;;;   1) empty (zero elements),
@@ -37,151 +49,143 @@
   (make-empty)
   empty?)
 
-;; shared singleton empty object
+;; shared singleton empty trees
 (define *empty* (make-empty))
 (define *empty-promise* (delay *empty*))
 
 ;;; A single tree is one element boxed in a record.
-
 (define-record-type <single>
-  (make-single x)
+  (make-single elt)
   single?
-  (x single-x))
+  (elt single-ref))
 
 ;;; A deep tree is comprised of three parts,
-;;;   1) a left "digit" of 1-4 elements;
-;;;   2) a "spine" holding elements between the digits, described below; and
-;;;   3) a right "digit" of 1-4 elements.
+;;;   1) a left *digit* of 1-4 elements;
+;;;   2) a *spine-promise* holding elements between the digits, described below; and
+;;;   3) a right *digit* of 1-4 elements.
 ;;;
 ;;; The spine is a promise to a nested finger tree. Each element of
-;;; the inner spine tree is a "node" that contains 2-3 elements of the
+;;; the inner spine tree is a *node* that contains 2-3 elements of the
 ;;; outer tree and a cached sum of the measurements of the
 ;;; elements. More on this later.
-
 (define-record-type <deep>
-  (make-deep l sp r)
+  (make-deep left spine-promise right)
   deep?
-  (l deep-l)    ; digit?
-  (sp deep-sp)  ; promise for a finger-tree?
-  (r deep-r))   ; digit?
+  (left deep-left)
+  (spine-promise deep-spine-promise)
+  (right deep-right))
 
-;;; We represent a digit by a vector of length 1-4. Our rationale is
-;;; that, as compared to lists of length 1-4, vectors are likely to be
-;;; faster, incur less garbage collection, and are no less space
-;;; efficient than lists.
-
-(define digit vector)
-(define list->digit list->vector)
-(define digit-length vector-length)
-(define digit-ref vector-ref)
-(define digit-set! vector-set!)
+;;; A digit is a vector of length 1-4. Our rationale is that, as
+;;; compared to lists of length 1-4, vectors are likely to be faster,
+;;; incur less garbage collection, and are no less space efficient
+;;; than lists.
+(define digit            vector)
+(define list->digit      list->vector)
+(define digit-length     vector-length)
+(define digit-ref        vector-ref)
+(define digit-set!       vector-set!)
 (define digit->generator vector->generator)
+
+(define (digit-single? dgt)
+  (= 1 (digit-length dgt)))
+
+(define (digit-non-single? dgt)
+  (not (digit-single? dgt)))
+
+(define (digit-full? dgt)
+  (= 4 (digit-length dgt)))
+
+(define (digit-non-full? dgt)
+  (not (digit-full? dgt)))
 
 (define (digit-last-index dgt)
   (- (digit-length dgt) 1))
 
-(define (digit-front dgt)
+(define (digit-left dgt)
   (digit-ref dgt 0))
 
-(define (digit-back dgt)
+(define (digit-right dgt)
   (digit-ref dgt (digit-last-index dgt)))
 
-(define (digit-add-front dgt obj)
+(define (digit-add-left dgt obj)
   (let ((v (make-vector (+ 1 (vector-length dgt)))))
     (vector-set! v 0 obj)
     (vector-copy! v 1 dgt)
     v))
 
-(define (digit-add-back dgt obj)
+(define (digit-add-right dgt obj)
   (let* ((k (vector-length dgt))
 	 (v (make-vector (+ 1 k))))
     (vector-copy! v 0 dgt)
     (vector-set! v k obj)
     v))
 
-(define digit-drop (cute vector-copy <> <>))
+(define (digit-remove-left dgt)
+  (vector-copy dgt 1))
 
-(define digit-take (cute vector-copy <> 0 <>))
+(define (digit-remove-right dgt)
+  (vector-copy dgt 0 (digit-last-index dgt)))
 
-(define digit-remove-front (cute digit-drop <> 1))
-
-(define (digit-remove-back dgt)
-  (digit-take dgt (digit-last-index dgt)))
-
-(define (digit-single? dgt)
-  (= 1 (digit-length dgt)))
-
-(define (digit-nonsingle? dgt)
-  (> (digit-length dgt) 1))
-
-(define (digit-full? dgt)
-  (= 4 (digit-length dgt)))
-
-(define (digit-nonfull? dgt)
-  (< (digit-length dgt) 4))
-
-(define (digit->finger-tree dgt from to)
-  (case (- to from)
-    ((0)
-     *empty*)
-    ((1)
-     (make-single (digit-ref dgt from)))
-    (else
-     (let ((from+1 (+ 1 from)))
-       (make-deep (vector-copy dgt from from+1)
-		  *empty-promise*
-		  (vector-copy dgt from+1 to))))))
+(define (digit->list dgt)
+  (vector->list dgt))
 
 (define (full-digit-values dgt)
-  (values (vector-ref dgt 0)
-	  (vector-ref dgt 1)
-	  (vector-ref dgt 2)
-	  (vector-ref dgt 3)))
+  (values (digit-ref dgt 0)
+	  (digit-ref dgt 1)
+	  (digit-ref dgt 2)
+	  (digit-ref dgt 3)))
 
 ;;; A node has two shapes:
-;;;  1) a 2-node of a measurement and two elements; or
-;;;  2) a 3-node of a measurement and three elements.
+;;;  1) a *2-node* containing a measurement m and two elements x, y; OR
+;;;  2) a *3-node* containing a measurement m and three elements x, y, z.
 ;;;
-;;; We represent a node by a vector of length 3 or 4,
-;;; respectively. Two distinct record types would be cleaner, but also
-;;; slower since we wouldn't be able to manipulate a node until after
-;;; querying its type and branching.
+;;; m is the sum of the measurements of all elements in the node.
+;;;
+;;; A node is represented by a vector of length 3 or 4. (Two distinct
+;;; record types might be more type safe, but that would be slower
+;;; since we couldn't manipulate a node until after querying its type
+;;; and branching; and converting a node to a digit would be more
+;;; complicated.)
 
-(define (node2? node)
-  (= 3 (vector-length node)))
+(define (node2 meas x y)
+  (vector (measure-add meas
+		       (measure-get meas x)
+		       (measure-get meas y))
+	  x
+	  y))
 
-(define node-m (cute vector-ref <> 0))
-(define node-x (cute vector-ref <> 1))
-(define node-y (cute vector-ref <> 2))
-(define node-z (cute vector-ref <> 3)) ; node-z must not be called on a 2-node
+(define (node3 meas x y z)
+  (vector (measure-add meas
+		       (measure-get meas x)
+		       (measure-get meas y)
+		       (measure-get meas z))
+	  x
+	  y
+	  z))
 
-;; Construct a node, computing its cached measurement from its
-;; elements.
+(define (node2? node)      (= 3 (vector-length node)))
+(define (node-m node)      (vector-ref node 0))
+(define (node-x node)      (vector-ref node 1))
+(define (node-y node)      (vector-ref node 2))
+(define (node-z node)      (vector-ref node 3))
+(define (node->digit node) (digit-remove-left node)) ;; just drop m
 
-(define (make-node2 madd mget x y)
-  (vector (madd (mget x) (mget y))
-	  x y))
-(define (make-node3 madd mget x y z)
-  (vector (madd (madd (mget x) (mget y))
-		(mget z))
-	  x y z))
-
-(define node->digit (cute vector-copy <> 1))
+;;; Helper syntax.
 
 ;; Syntax to match a nonempty tree based on its shape.
-(define-syntax match-nonempty-tree
+(define-syntax match-non-empty-tree
   (syntax-rules (single deep)
-    ((match-nonempty-tree TREE
+    ((match-non-empty-tree TREE
        ((single X)
 	SINGLE-BODY)
        ((deep L SP R)
 	DEEP-BODY))
      (if (single? TREE)
-	 (let ((X (single-x TREE)))
+	 (let ((X (single-ref TREE)))
 	   SINGLE-BODY)
-	 (let ((L (deep-l TREE))
-	       (SP (deep-sp TREE))
-	       (R (deep-r TREE)))
+	 (let ((L (deep-left TREE))
+	       (SP (deep-spine-promise TREE))
+	       (R (deep-right TREE)))
 	   DEEP-BODY)))))
 
 ;; Match a tree based on its shape.
@@ -196,30 +200,465 @@
        DEEP-BODY))
      (if (empty? TREE)
 	 EMPTY-BODY
-	 (match-nonempty-tree TREE
+	 (match-non-empty-tree TREE
 	   ((single X)
 	    SINGLE-BODY)
 	   ((deep L SP R)
 	    DEEP-BODY))))))
 
-;;; Special case to build a 2-element tree.
-(define (make-double e0 e1)
-  (make-deep (digit e0) *empty-promise* (digit e1)))
+;;; Helper procedures.
 
-;; Call (finger-tree) to create an empty tree, or (finger-tree madd
-;; mget element ...) to create a tree with elements.
-(define finger-tree
+;; Construct a finger tree from two elements.
+(define (finger-tree-2 x y)
+  (make-deep (digit x) *empty-promise* (digit y)))
+
+;; Convert a measure for elements into a measure for spine nodes.  The
+;; returned measure uses the same add-proc, and uses node-m as the
+;; get-proc.
+(define (measure-spine elt-measure)
+  (make-measure node-m
+		(measure-add-proc elt-measure)))
+
+;; Create a node3 from three elements, and add it to the left side of
+;; the spine.
+(define (spine-add-3-left meas spine x y z)
+  (finger-tree-add-left (measure-spine meas)
+			spine
+			(node3 meas x y z)))
+
+(define (spine-add-3-right meas spine x y z)
+  (finger-tree-add-right (measure-spine meas)
+			 spine
+			 (node3 meas x y z)))
+
+;; binary-append needs a spine-add-2-right. Note that there is no need
+;; for spine-add-2-left.
+(define (spine-add-2-right meas spine x y)
+  (finger-tree-add-right (measure-spine meas)
+			 spine
+			 (node2 meas x y)))
+
+;; Repair a deep tree that is missing a digit.
+(define (restore-left-digit spine right)
+  (cond
+   ((finger-tree-non-empty? spine)
+    ;; Pull one node out of the spine, and use the node's elements as
+    ;; a new digit.
+    (make-deep (node->digit (finger-tree-left spine))
+	       (delay (finger-tree-remove-left spine))
+	       right))
+   ((digit-non-single? right)
+    ;; Spine is empty, but we can steal an element from the right
+    ;; digit.
+    (make-deep (digit (digit-left right))
+	       *empty-promise*
+	       (digit-remove-left right)))
+   (else
+    ;; Only one element remains, downgrade to a single tree.
+    (make-single (digit-left right)))))
+
+(define (restore-right-digit left spine)
+  ;; symmetric to restore-left-digit
+  (cond
+   ((finger-tree-non-empty? spine)
+    (make-deep left
+	       (delay (finger-tree-remove-right spine))
+	       (node->digit (finger-tree-right spine))))
+   ((digit-non-single? left)
+    (make-deep (digit-remove-right left)
+	       *empty-promise*
+	       (digit (digit-right left))))
+   (else
+    (make-single (digit-left left)))))
+
+;; Append two trees into one tree.
+(define (append-binary meas left right)
+  (cond
+   ;; if either tree is empty, there's nothing to do
+   ((empty? left ) right)
+   ((empty? right) left )
+   
+   ;; if either tree is single, this reduces to add-left or add-right
+   ((single? left )  (finger-tree-add-left  meas right (single-ref left )))
+   ((single? right)  (finger-tree-add-right meas left  (single-ref right)))
+   
+   (else
+    ;; Both trees are deep. We need to build a new deep tree. Reading
+    ;; left-to-right, we have:
+    ;;
+    ;;   left-left
+    ;;   left-spine
+    ;;   left-right
+    ;;   right-left
+    ;;   right-spine
+    ;;   right-right
+    (let (
+	  ;; left-left becomes the new left digit.
+	  (new-left (deep-left left))
+
+	  ;; right-right becomes the new right digit.
+	  (new-right (deep-right right))
+
+	  ;; Everything else is lazily smooshed together into a new
+	  ;; spine.
+	  (new-spine-promise
+	   (delay
+	     (let* (
+		    ;; left-right and right-left form a list of 2-8
+		    ;; *loose* elements.
+		    (loose (append (digit->list (deep-right left ))
+				   (digit->list (deep-left  right))))
+
+		    ;; Merge the loose elements into left-spine
+		    ;; (absorb-loose is defined next).
+		    (left-spine (apply absorb-loose
+				       meas
+				       (force (deep-spine-promise left))
+				       loose)))
+	       ;; Recursively append the resulting left spine with right-spine.
+	       (append-binary (measure-spine meas)
+			      left-spine
+			      (force (deep-spine-promise right)))))))
+      
+      ;; That accounts for everything!
+      (make-deep new-left new-spine-promise new-right)))))
+
+;; (absorb-loose meas spine [elt ...])
+;; Partition elt... into nodes and add the nodes to the right side of spine.
+;; The number of elements must be in the range [2, 8].
+;; meas should be a measure for elements (not spine nodes).
+(define absorb-loose
   (case-lambda
-   (()
-    *empty*)
-   ((madd mget)
-    *empty*)
-   ((madd mget e0)
-    (make-single e0))
-   ((madd mget e0 e1)
-    (make-double e0 e1))
-   ((madd mget . elements)
-    (list->finger-tree madd mget elements))))
+   ;; 2 elements, add a node2
+   ((meas spine a b)
+    (spine-add-2-right meas spine a b))
+   ;; 3 elements, add a node3
+   ((meas spine a b c)
+    (spine-add-3-right meas spine a b c))
+   ;; 4 elements, add (2) node2
+   ((meas spine a b c d)
+    (spine-add-2-right meas
+		       (spine-add-2-right meas spine a b)
+		       c d))
+   ;; 5-8 elements: add a node3 and recurse to handle the rest.
+   ((meas spine a b c . rest)
+    (apply absorb-loose
+	   meas
+	   (spine-add-3-right meas spine a b c)
+	   rest))))
+
+;; Scan (search) a digit. See finger-tree-scan below.
+(define (scan-digit meas mpred mzero dgt match absent)
+  (let loop ((m mzero) ; accumulated measurement
+	     (i 0)) ; digit index
+    (let* ((x (digit-ref dgt i)) ; current element
+	   (m/x (measure-get+add meas m x))) ; measurement after x
+      (cond
+       ((mpred m/x) ; success!
+	(match m x))
+       ((= i (digit-last-index dgt)) ; end of digit, failure
+	(absent m))
+       (else ; keep looking
+	(loop m/x (+ i 1)))))))
+
+;; Scan (search) a node. See finger-tree-scan below.
+;;
+;; node must be a node that certainly contains a matching
+;; element. This procedure decides which of the 2-3 elements that is.
+(define (scan-node meas mpred mzero node match)
+  ;; add x's measurement
+  (let* ((x (node-x node))
+	 (m/x (measure-get+add meas mzero x)))
+    (if (mpred m/x)
+	(match mzero x) ; x matches
+	(let ((y (node-y node)))
+	  (if (node2? node)
+	      (match m/x y) ; by process of elimination y must match
+	      (let ((m/y (measure-get+add meas m/x y)))
+		(if (mpred m/y)
+		    (match m/x y) ; y matches
+		    (match m/y (node-z node))))))))) ; z must match
+
+;; Bisect (split) a digit. See finger-tree-bisect below. In the case
+;; of match, the prefix and suffix are digit/vector objects.
+(define (bisect-digit meas mpred mzero dgt match absent)
+  (let loop ((m mzero)
+	     (i 0))
+    (let* ((x (digit-ref dgt i))
+	   (m/x (measure-get+add meas m x)))
+      (cond
+       ((mpred m/x)
+	(match m
+	       (vector-copy dgt 0 i)
+	       (vector-copy dgt i)))
+       ((= i (digit-last-index dgt))
+	(absent m))
+       (else
+	(loop m/x (+ i 1)))))))
+
+;; Bisect (split) a node. See finger-tree-bisect below.
+(define (bisect-node meas mpred mzero
+		     left right
+		     spine-prefix spine-suffix
+		     match)
+  ;; separate out the node containing the matching element
+  (let* ((node (finger-tree-left spine-suffix))
+	 (spine-suffix (finger-tree-remove-left spine-suffix))
+	 (x (node-x node))
+	 (y (node-y node))
+	 (m/x (measure-get+add meas mzero x)))
+    (cond
+     ((mpred m/x) ;; match on x, build prefix and suffix trees
+      (match mzero
+	     (restore-right-digit left spine-prefix)
+	     (make-deep (node->digit node) (delay spine-suffix) right)))
+     ((node2? node) ;; match on y
+      (match m/x
+	     (make-deep left (delay spine-prefix) (digit x))
+	     (make-deep (digit y) (delay spine-suffix) right)))
+     (else
+      (let ((m/y (measure-get+add meas m/x y))
+	    (z (node-z node)))
+	(if (mpred m/y)
+	    ;; match on y
+	    (match m/x
+		   (make-deep left (delay spine-prefix) (digit x))
+		   (make-deep (digit y z) (delay spine-suffix) right))
+	    ;; match on z
+	    (match m/y
+		   (make-deep left (delay spine-prefix) (digit x y))
+		   (make-deep (digit z) (delay spine-suffix) right))))))))
+
+(define *set-mzero* #f) ; unused
+
+(define (make-set-pred order key)
+  (lambda (m)
+    (>=? (set-order-comparator order)
+	 m
+	 key)))
+
+;; Merge the elements of left and right in non-decreasing order. This
+;; is the foundation of all the set relation and set operation
+;; procedures. It supports short-circuiting (stopping the merge as
+;; soon as the outcome is certain).
+;;
+;; This works like a fold, where
+;;  - order is a set order object
+;;  - zero is the initial accumulated value
+;;  - left and right are tree sets to merge
+;;  - tie, left-first, right-first, left-remains, right-remains, and
+;;    both-empty are procedures that control the fold
+;;
+;; At each step in the merge, we call an appropriate procedure
+;; depending on the state of the merging process.
+;;
+;; The procedures are defined below. In each case,
+;;   - accum is the accumulated value
+;;   - l is an element from left
+;;   - r is an element from right
+;;   - continue is a procedure; call (continue new-accum) to proceed
+;;     with the rest of the merge, using the given new accumulated
+;;     value.
+;; The procedures, and situations when they are called, are:
+;;   - (tie accum l r continue): When left and right contain two
+;;     elements l and r that are =?.
+;;   - (left-first accum l continue): When left contains an element l
+;;      that is absent from r.
+;;   - (right-first accum r continue): When right contains an element r
+;;      that is absent from l.
+;;   - (left-remains accum lgen): When all elements of right have been
+;;     merged. lgen is a generator for the remaining elements.
+;;   - (right-remains accum rgen): When all elements of left have been
+;;     merged. rgen is a generator for the remaining elements.
+;;   - (both-empty accum): When both trees are empty.
+(define (set-merge order
+		   tie
+		   left-first
+		   right-first
+		   left-remains
+		   right-remains
+		   both-empty
+		   zero
+		   left
+		   right)
+  (let ((lgen (finger-tree->generator left))
+	(rgen (finger-tree->generator right)))
+    (let loop ((accum zero)
+	       (l (lgen))
+	       (r (rgen)))
+      (cond
+       ((eof-object? l)
+	(if (eof-object? r)
+	    (both-empty accum)
+	    (right-remains accum (gcons* r rgen))))
+       ((eof-object? r)
+	(left-remains accum (gcons* l lgen)))
+       (else
+	(comparator-if<=>
+	 (set-order-comparator order)
+	 (set-order-key order l)
+	 (set-order-key order r)
+	 (left-first accum l (lambda (new-accum) (loop new-accum (lgen) r)))
+	 (tie accum l r (lambda (new-accum) (loop new-accum (lgen) (rgen))))
+	 (right-first accum r (lambda (new-accum) (loop new-accum l (rgen))))))))))
+  
+(define (set<=?-binary order left right)
+  (let ((*unused* #f))
+    (set-merge order
+	       (lambda (accum l r continue) (continue *unused*))
+	       (lambda (accum l continue)   #f)
+	       (lambda (accum r continue)   (continue *unused*))
+	       (lambda (accum lgen)         #f)
+	       (lambda (accum rgen)         #t)
+	       (lambda (accum)              #t)
+	       *unused*
+	       left
+	       right)))
+
+(define (set<?-binary order left right)
+  ;; accum is #f as long as left and right seem to be equal, and
+  ;; becomes #t once we see a unique element in right that makes this
+  ;; a strict subset.
+  (set-merge order
+	     (lambda (accum l r continue) (continue accum))
+	     (lambda (accum l continue)   #f)
+	     (lambda (accum r continue)   (continue #t))
+	     (lambda (accum lgen)         #f)
+	     (lambda (accum rgen)         #t)
+	     (lambda (accum)              accum)
+	     #f
+	     left
+	     right))
+
+(define (set=?-binary order left right)
+  (let ((*unused* #f))
+    (set-merge order
+	       (lambda (accum l r continue) (continue *unused*))
+	       (lambda (accum l continue)   #f)
+	       (lambda (accum r continue)   #f)
+	       (lambda (accum lgen)         #f)
+	       (lambda (accum rgen)         #f)
+	       (lambda (accum)              #t)
+	       *unused*
+	       left
+	       right)))
+
+(define (binary-relation->variadic proc)
+  ;; Note: this implements short-circuiting, meaning that we stop
+  ;; comparing sets as soon as a false relation is encountered.
+  (lambda (order set1 set2 . rest)
+    (and (proc order set1 set2)
+	 (let loop ((left set2)
+		    (rest rest))
+	   (or (null? rest)
+	       (let-values (((right rest) (car+cdr rest)))
+		 (and (proc order left right)
+		      (loop right rest))))))))
+
+(define (set-difference-binary order left right)
+  (let ((meas (set-order-measure order)))
+    (set-merge order
+	       (lambda (accum l r continue) (continue accum))
+	       (lambda (accum l continue)
+		 (continue (finger-tree-add-right meas accum l)))
+	       (lambda (accum r continue)   (continue accum))
+	       (lambda (accum lgen)
+		 (append-binary meas
+				accum
+				(increasing-generator->finger-tree-set order lgen)))
+	       (lambda (accum rgen)         accum)
+	       (lambda (accum)              accum)
+	       *empty*
+	       left
+	       right)))
+
+(define (set-intersect-binary order reduce left right)
+  (let ((meas (set-order-measure order)))
+    (set-merge order
+	       (lambda (accum l r continue)
+		 (continue (finger-tree-add-right meas accum (reduce l r))))
+	       (lambda (accum l continue)   (continue accum))
+	       (lambda (accum r continue)   (continue accum))
+	       (lambda (accum lgen)         accum)
+	       (lambda (accum rgen)         accum)
+	       (lambda (accum)              accum)
+	       *empty*
+	       left
+	       right)))
+
+(define (set-union-binary order reduce left right)
+  (let ((meas (set-order-measure order)))
+    (set-merge order
+	       (lambda (accum l r continue)
+		 (continue (finger-tree-add-right meas accum (reduce l r))))
+	       (lambda (accum l continue)
+		 (continue (finger-tree-add-right meas accum l)))
+	       (lambda (accum r continue)
+		 (continue (finger-tree-add-right meas accum r)))
+	       (lambda (accum lgen)
+		 (append-binary meas
+				accum
+				(increasing-generator->finger-tree-set order lgen)))
+	       (lambda (accum rgen)
+		 (append-binary meas
+				accum
+				(increasing-generator->finger-tree-set order rgen)))
+	       (lambda (accum)
+		 accum)
+	       *empty*
+	       left
+	       right)))
+
+(define (set-xor-binary order left right)
+  (let ((meas (set-order-measure order)))
+    (set-merge order
+	       (lambda (accum l r continue)
+		 (continue accum))
+	       (lambda (accum l continue)
+		 (continue (finger-tree-add-right meas accum l)))
+	       (lambda (accum r continue)
+		 (continue (finger-tree-add-right meas accum r)))
+	       (lambda (accum lgen)
+		 (append-binary meas
+				accum
+				(increasing-generator->finger-tree-set order lgen)))
+	       (lambda (accum rgen)
+		 (append-binary meas
+				accum
+				(increasing-generator->finger-tree-set order rgen)))
+	       (lambda (accum)
+		 accum)
+	       *empty*
+	       left
+	       right)))
+
+(define (binary-operation->variadic proc)
+  (lambda (order set1 . sets)
+    (fold (lambda (right accum)
+	    (proc order accum right))
+	  set1
+	  sets)))
+
+(define (binary-operation->variadic/reduce proc)
+  (lambda (order reduce set1 . sets)
+    (fold (lambda (right accum)
+	    (proc order reduce accum right))
+	  set1
+	  sets)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 3) finger-tree (exported)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; (make-finger-tree)
+;; Construct an empty tree.
+(define (make-finger-tree)
+  *empty*)
+
+;; (finger-tree meas elt ...)
+;; Construct a finger tree containing elt ...
+(define (finger-tree meas . elts)
+  (list->finger-tree meas elts))
 
 (define (finger-tree? x)
   (or (deep? x) ; assume deep trees are most common
@@ -228,628 +667,561 @@
 
 (define finger-tree-empty? empty?)
 
+(define (finger-tree-non-empty? tree)
+  (not (finger-tree-empty? tree)))
+
 (define (finger-tree-length tree)
   (generator-fold (lambda (obj length)
 		    (+ 1 length))
 		  0
 		  (finger-tree->generator tree)))
 
-(define (finger-tree-front tree)
-  (match-nonempty-tree tree
-    ((single x)
-     x) ; easy
-    ((deep l sp r)
-     (digit-front l)))) ; easy
+(define (finger-tree-left tree)
+  (match-non-empty-tree tree
+    ((single x)     x)
+    ((deep l sp r)  (digit-left l))))
 
-(define (finger-tree-back tree)
-  ;; symmetric
-  (match-nonempty-tree tree
-    ((single x)
-     x)
-    ((deep l sp r)
-     (digit-back r))))
+(define (finger-tree-right tree)
+  (match-non-empty-tree tree
+    ((single x)     x)
+    ((deep l sp r)  (digit-right r))))
 
-(define (finger-tree-add-front madd mget tree obj)
-  (let recurse ((mget mget)
-		(tree tree)
-		(obj obj))
-    (match-tree tree
-     ((empty) ; empty becomes single
-      (make-single obj))
-     ((single x) ; single becomes deep
-      (make-double obj x))
-     ((deep l sp r) ; deep gets deeper
-      (if (digit-nonfull? l)
-	  ;; May safely add another element to the left digit.
-	  (make-deep (digit-add-front l obj) sp r)
+(define (finger-tree-add-left meas tree elt)
+  (match-tree tree
+    ((empty) ; empty -> single
+     (make-single elt))
+    ((single old-elt) ; single -> deep
+     (finger-tree-2 elt old-elt))
+    ((deep left spine-promise right)
+     (if (digit-non-full? left)
+	 ;; Add one more elment to the left finger.
+	 (make-deep (digit-add-left left elt)
+		    spine-promise
+		    right)
+	 ;; Can't do that. Pull the 3 rightmost elements from the left
+	 ;; digit and push them into the spine as a node. The
+	 ;; remaining digit element, and the passed-in element, form
+	 ;; a new left finger.
+	 (let-values (((a b c d) (full-digit-values left)))
+	   (make-deep (digit elt a)
+		      (delay (spine-add-3-left meas (force spine-promise) b c d))
+		      right))))))
 
-	  ;; Can't do that, so pull 3 elements out of the left
-	  ;; digit, turn them into a node, and push them into the
-	  ;; spine; that leaves the fourth digit element, and the
-	  ;; new one, in the left digit.
-	  (receive (a b c d) (full-digit-values l)
-	    (make-deep (digit obj a)
-		       (delay
-			 (recurse node-m
-				  (force sp)
-				  (make-node3 madd mget b c d)))
-		       r)))))))
+(define (finger-tree-add-right meas tree elt)
+  ;; symmetric to finger-tree-add-left
+  (match-tree tree
+    ((empty)
+     (make-single elt))
+    ((single old-elt)
+     (finger-tree-2 old-elt elt))
+    ((deep left spine-promise right)
+     (if (digit-non-full? right)
+	 (make-deep left
+		    spine-promise
+		    (digit-add-right right elt))
+	 (let-values (((a b c d) (full-digit-values right)))
+	   (make-deep left
+		      (delay (spine-add-3-right meas (force spine-promise) a b c))
+		      (digit d elt)))))))
 
-(define (finger-tree-add-back madd mget tree obj)
-  ;; symmetric
-  (let recurse ((mget mget)
-		(tree tree)
-		(obj obj))
-    (match-tree tree
-      ((empty)
-       (make-single obj))
-      ((single x)
-       (make-double x obj))
-      ((deep l sp r)
-       (if (digit-nonfull? r)
-	   (make-deep l sp (digit-add-back r obj))
-	   (receive (a b c d) (full-digit-values r)
-	     (make-deep l
-			(delay
-			  (recurse node-m
-				   (force sp)
-				   (make-node3 madd mget a b c)))
-			(digit d obj))))))))
+(define (finger-tree-remove-left tree)
+  (match-non-empty-tree tree
+    ((single elt)
+     ;; single downgrades to empty
+     *empty*)
+    ((deep left spine-promise right)
+     (if (digit-non-single? left)
+	 ;; just drop one element from the left digit
+	 (make-deep (digit-remove-left left) spine-promise right)
 
-;; Repair a deep node that's missing its left digit.
-(define (deep-replenish-left s r)
-  (cond
-   ((not (empty? s))
-    ;; Spine is nonempty so we can simply pull out a node and convert
-    ;; it to a digit.
-    (make-deep (node->digit (finger-tree-front s))
-	       (delay (finger-tree-remove-front s))
-	       r))
-   ((digit-nonsingle? r)
-    ;; Spine is empty, so no luck there, but the right digit has
-    ;; multiple elements so we can safely move one over.
-    (make-deep (digit (digit-front r))
-	       *empty-promise*
-	       (digit-remove-front r)))
-   (else
-    ;; There's only one element left in the entire tree, so we are
-    ;; demoted to a single.
-    (make-single (digit-front r)))))
+	 ;; no digit left, repair it
+	 (restore-left-digit (force spine-promise) right)))))
 
-(define (deep-replenish-right l s)
-  ;; symmetric
-  (cond
-   ((not (empty? s))
-    (make-deep l
-	       (delay (finger-tree-remove-back s))
-	       (node->digit (finger-tree-back s))))
-   ((digit-nonsingle? l)
-    (make-deep (digit-remove-back l)
-	       *empty-promise*
-	       (digit (digit-back l))))
-   (else
-    (make-single (digit-front l)))))
+(define (finger-tree-remove-right tree)
+  ;; symmetric to finger-tree-remove-left
+  (match-non-empty-tree tree
+    ((single elt)
+     *empty*)
+    ((deep left spine-promise right)
+     (if (digit-non-single? right)
+	 (make-deep left spine-promise (digit-remove-right right))
+	 (restore-right-digit left (force spine-promise))))))
 
-(define (deep-drop-left l sp r k)
-  (if (< k (digit-length l))
-      (make-deep (digit-drop l k) sp r)
-      (deep-replenish-left (force sp) r)))
+(define (finger-tree-append meas tree1 . trees)
+  ;; Reduces to append-binary.
+  (fold (lambda (tree accum)
+	  (append-binary meas accum tree))
+	tree1
+	trees))
 
-(define (deep-drop-right l sp r k)
-  (let ((n (digit-length r)))
-    (if (< k n)
-	(make-deep l sp (digit-take r (- n k)))
-	(deep-replenish-right l (force sp)))))
+;; Performs a *scan* on tree. This is a very general operation whose
+;; meaning depends on the measure in use. In a set-like tree, scan is
+;; analogous to a search operation. In a vector-like tree, scan is
+;; analogous to vector-ref.
+;;
+;; A scan works like a fold that accumulates a measurement value that
+;; is initially mzero. Elements are visited in left-to-right
+;; order. Each element is measured, and that measurement is added to
+;; the accumulated measurement. The element counts as a match if
+;; (mpred <accumulated-measure>) yields true.
+;;
+;; On success (a match is found), calls
+;;   (match m elt)
+;; where m is the accumulated measurement *before* elt; and elt is the
+;; matching element.
+;;
+;; On failure (no match is found), calls
+;;   (absent m)
+;; where m is the final accumulated measurement *after* all elements.
+;;
+;; In many use cases these m values are unneeded and can be ignored.
+;;
+;; Time efficiency is O(log n).
+(define (finger-tree-scan meas mpred mzero tree match absent)
+  (match-tree tree
+    ((empty)
+     ;; empty tree, fail
+     (absent mzero))
+    
+    ((single a)
+     ;; one element; measure it...
+     (let ((m/a (measure-get+add meas mzero a)))
+       ;; test the predicate...
+       (if (mpred m/a)
+	   (match mzero a)   ; success!
+	   (absent m/a))))   ; fail!
+    
+    ;; first scan the left digit
+    ((deep left spine-promise right)
+     (scan-digit meas mpred mzero left
+		 match ; success!
+		 (lambda (m/left)
+		   ;; no match in the left digit, try the spine recursively
+		   (finger-tree-scan
+		    (measure-spine meas)
+		    mpred
+		    m/left
+		    (force spine-promise)
+		    (lambda (m/pre node)
+		      ;; success in a node; find which specific element
+		      (scan-node meas mpred m/pre node match))
+		    (lambda (m/spine)
+		      ;; no match in the spine either, finally try the
+		      ;; right digit
+		      (scan-digit meas mpred m/spine right match absent))))))))
 
-(define (finger-tree-remove-front tree)
-  (let recurse ((tree tree))
-    (match-nonempty-tree tree
-      ((single x)
-       *empty*)
-      ((deep l sp r)
-       (deep-drop-left l sp r 1)))))
+;; Bisect a tree. This is similar to the scan operation implemented in
+;; finger-tree-scan. The definition for meas, mpred, mzero, tree, and
+;; absent are identical to finger-tree-scan. The difference is in
+;; match.
+;;
+;; On success, calls
+;;    (match m prefix suffix)
+;; where
+;;  - m is the accumulated measurement *before* the matching element,
+;;    as in a scan.
+;;  - prefix is a tree containing all elements before the match. This
+;;    may be empty if the match is the left element of the original
+;;    tree.
+;;  - suffix is a tree containing the match and all elements
+;;    after. This will never be empty since it always contains at least
+;;    the matching element.
+;;
+;; Just like scan, this is a very general operation whose effect
+;; depends on the measurement in use. Depending on the measurement, it
+;; could be used for a split-at, predecessor, successor, or tree
+;; removal operation.
+;;
+;; Time efficiency is O(log n), but more expensive than
+;; finger-tree-scan, so only use finger-tree-bisect when you actually
+;; need the prefix or suffix.
+(define (finger-tree-bisect meas mpred mzero tree match absent)
+  (match-tree tree
+	    
+    ((empty) ; empty tree, failure
+     (absent mzero))
+    
+    ((single x) ; one element, check it
+     (let ((m/x (measure-get+add meas mzero x)))
+       (if (mpred m/x)
+	   (match mzero *empty* tree) ; note prefix is empty
+	   (absent m/x))))
+    
+    ((deep left spine-promise right)
+     ;; try the left digit
+     (bisect-digit meas mpred mzero left
+		   (lambda (m vect-pre vect-suf)
+		     ;; match in the left digit; build prefix and suffix
+		     (match m
+			    (vector->finger-tree meas vect-pre)
+			    (make-deep vect-suf spine-promise right)))
+		   ;; no match in left digit, try the spine
+		   (lambda (m/left)
+		     (finger-tree-bisect
+		      (measure-spine meas)
+		      mpred
+		      m/left
+		      (force spine-promise)
+		      (lambda (m spine-prefix spine-suffix)
+			;; found a matching node; split everything
+			;; into a prefix and suffix
+			(bisect-node meas mpred
+				     m left right
+				     spine-prefix spine-suffix
+				     match))
+		      (lambda (m/spine)
+			;; no match in spine, finally try the right digit
+			(bisect-digit meas mpred m/spine right
+				      (lambda (m vect-pre vect-suf)
+					;; match in the right digit;
+					;; this time we might have to
+					;; deal with an empty vect-pre
+					(match m
+					       (if (= 0 (vector-length vect-pre))
+						   (restore-right-digit left (force spine-promise))
+						   (make-deep left spine-promise vect-pre))
+					       (vector->finger-tree meas vect-suf)))
+				      absent))))))))
 
-(define (finger-tree-remove-back tree)
-  (let recurse ((tree tree))
-    (match-nonempty-tree tree
-      ((single x)
-       *empty*)
-      ((deep l sp r)
-       (deep-drop-right l sp r 1)))))
+(define (finger-tree-reverse meas tree)
+  (generator->finger-tree meas (finger-tree->reverse-generator tree)))
 
-(define (generator->finger-tree madd mget gen)
-  ;; We *could* use generator-fold and finger-tree-add-back, but that
-  ;; would copy and garbage collect a right digit object at each
-  ;; iteration, which would be slow. Instead we will gather triples of
-  ;; elements and add them to the spine one 3-node at a time.
-  (let ((front (gen)))
-    (if (eof-object? front)
-	;; zero elements
-	*empty*
-	(let ((e (gen)))
-	  (if (eof-object? e)
-	      ;; one element
-	      (make-single front)
+(define (generator->finger-tree meas gen)
+  ;; This has the potential to be a bottleneck so we're careful to
+  ;; minimize overhead here. In partiular we're avoiding the overhead
+  ;; of all the restructuring involved in using finger-tree-add-right
+  ;; on each element.
+  ;;
+  ;; First try to generate 5 elements to make for a full left digit
+  ;; and non-empty right digit. (We have to use let*, not let, to be
+  ;; certain of order of evaluation.)
+  (let* ((a (gen))
+	 (b (gen))
+	 (c (gen))
+	 (d (gen))
+	 (e (gen)))
+    ;; Did we get all 5?
+    (cond
+     ((eof-object? a) *empty*)
+     ((eof-object? b) (make-single a))
+     ((eof-object? c) (finger-tree-2 a b))
+     ((eof-object? d) (make-deep (digit a) *empty-promise* (digit b c)))
+     ((eof-object? e) (make-deep (digit a) *empty-promise* (digit b c d)))
+     (else
+      ;; Set aside the first 4 elements for the left digit.
+      (let ((left (digit a b c d)))
+	(let loop ((spine *empty*)
+		   (e e)) ; reserve 1 element so we can always make a right digit
+	  ;; Try to generate 3 elements for a full node3.
+	  (let* ((f (gen))
+		 (g (gen))
+		 (h (gen)))
+	    (cond
+	     ;; stop if we got <3
+	     ((eof-object? f) (make-deep left (delay spine) (digit e)))
+	     ((eof-object? g) (make-deep left (delay spine) (digit e f)))
+	     ((eof-object? h) (make-deep left (delay spine) (digit e f g)))
+	     ;; otherwise push a node3 into the spine; h is the new e
+	     (else (loop (spine-add-3-right meas spine e f g)
+			 h))))))))))
 
-	      ;; 2+ elements, build a spine 3 elements at a time
-	      (let ((buffer (digit e #f #f))) ; holds 1-3 elements
-		(let loop ((k 1) ; number of elements in buffer
-			   (s *empty*)) ; spine
-		  (let ((e (gen)))
-		    (cond
-		     ((eof-object? e) ; done
-		      (make-deep (digit front)
-				 (delay s)
-				 (digit-take buffer k)))
-		     ((< k 3) ; buffer not full yet
-		      (digit-set! buffer k e)
-		      (loop (+ 1 k) s))
-		     (else ; push 3 elements into the spine, leaving e in buffer
-		      (let* ((node (make-node3 madd
-					       mget
-					       (digit-ref buffer 0)
-					       (digit-ref buffer 1)
-					       (digit-ref buffer 2)))
-			     (s (finger-tree-add-back madd node-m s node)))
-			(digit-set! buffer 0 e)
-			(loop 1 s))))))))))))
+(define (list->finger-tree meas lst)
+  (generator->finger-tree meas (list->generator lst)))
+
+(define (vector->finger-tree meas vect)
+  (generator->finger-tree meas (vector->generator vect)))
 
 (define (finger-tree->generator tree)
-  (make-for-each-generator
-   (lambda (proc tree) ; finger-tree-for-each
-     (let recurse ((proc proc) (tree tree))
-       (match-tree tree
-         ((empty)
-	  (begin))
-	 ((single x)
-	  (proc x))
-	 ((deep l sp r)
-	  (begin
-	    (generator-for-each proc (vector->generator l))
-	    (recurse (lambda (node)
-		       (proc (node-x node))
-		       (proc (node-y node))
-		       (unless (node2? node)
-			       (proc (node-z node))))
-		     (force sp))
-	    (generator-for-each proc (vector->generator r)))))))
-   tree))
+  ;; Like generator->finger-tree this is a potential bottleneck so
+  ;; we're careful to avoid consing here.
+  ;;
+  ;; (gen-elt elt) returns a generator for all elements in the subtree
+  ;; rooted at elt.
+  (let recurse ((gen-elt (lambda (elt)
+			   (generator elt)))
+		(tree tree))
+    ;; (gen-digit dgt) returns a generator for all elements in the
+    ;; given digit.
+    (let ((gen-digit
+	   (lambda (dgt)
+	     (case (digit-length dgt)
+	       ((1)
+		(gen-elt (digit-ref dgt 0)))
+	       ((2)
+		(gappend (gen-elt (digit-ref dgt 0))
+			 (gen-elt (digit-ref dgt 1))))
+	       ((3)
+		(gappend (gen-elt (digit-ref dgt 0))
+			 (gen-elt (digit-ref dgt 1))
+			 (gen-elt (digit-ref dgt 2))))
+	       ((4)
+		(gappend (gen-elt (digit-ref dgt 0))
+			 (gen-elt (digit-ref dgt 1))
+			 (gen-elt (digit-ref dgt 2))
+			 (gen-elt (digit-ref dgt 3))))))))
+    (match-tree tree
+     ((empty)
+      (generator))
+     ((single a)
+      (gen-elt a))
+     ((deep left spine-promise right)
+      (gappend
+       (gen-digit left)
+       (recurse (lambda (node)
+		  (if (node2? node)
+		      (gappend (gen-elt (node-x node))
+			       (gen-elt (node-y node)))
+		      (gappend (gen-elt (node-x node))
+			       (gen-elt (node-y node))
+			       (gen-elt (node-z node)))))
+		(force spine-promise))
+       (gen-digit right)))))))
 
-(define (reverse-finger-tree->generator tree)
-  (make-for-each-generator
-   (lambda (proc tree) ; finger-tree-for-each
-     (let recurse ((proc proc) (tree tree))
-       (match-tree tree
-         ((empty)
-	  (begin))
-	 ((single x)
-	  (proc x))
-	 ((deep l sp r)
-	  (begin
-	    (generator-for-each proc (reverse-vector->generator r))
-	    (recurse (lambda (node)
-		       (unless (node2? node)
-			       (proc (node-z node)))
-		       (proc (node-y node))
-		       (proc (node-x node)))
-		     (force sp))
-	    (generator-for-each proc (reverse-vector->generator l)))))))
-   tree))
-
-(define (list->finger-tree madd mget list)
-  (generator->finger-tree madd mget (list->generator list)))
+(define (finger-tree->reverse-generator tree)
+  ;; Symmetric to finger-tree->generator.
+  (let recurse ((gen-elt (lambda (elt)
+			   (generator elt)))
+		(tree tree))
+    (let ((gen-digit
+	   (lambda (dgt)
+	     (case (digit-length dgt)
+	       ((1)
+		(gen-elt (digit-ref dgt 0)))
+	       ((2)
+		(gappend (gen-elt (digit-ref dgt 1))
+			 (gen-elt (digit-ref dgt 0))))
+	       ((3)
+		(gappend (gen-elt (digit-ref dgt 2))
+			 (gen-elt (digit-ref dgt 1))
+			 (gen-elt (digit-ref dgt 0))))
+	       ((4)
+		(gappend (gen-elt (digit-ref dgt 3))
+			 (gen-elt (digit-ref dgt 2))
+			 (gen-elt (digit-ref dgt 1))
+			 (gen-elt (digit-ref dgt 0))))))))
+    (match-tree tree
+     ((empty)
+      (generator))
+     ((single a)
+      (gen-elt a))
+     ((deep left spine-promise right)
+      (gappend
+       (gen-digit right)
+       (recurse (lambda (node)
+		  (if (node2? node)
+		      (gappend (gen-elt (node-y node))
+			       (gen-elt (node-x node)))
+		      (gappend (gen-elt (node-z node))
+			       (gen-elt (node-y node))
+			       (gen-elt (node-x node)))))
+		(force spine-promise))
+       (gen-digit left)))))))
 
 (define (finger-tree->list tree)
   (generator->list (finger-tree->generator tree)))
 
-(define (append-binary madd mget left right)
-  ;; This one is nontrivial, but makes sense if we proceed one step at
-  ;; a time.
-  (let recurse ((mget mget)
-		(left left)
-		(right right))
-    (cond
-     ;; If either operand is empty, we don't need to do anything.
-     ((empty? left)
-      right)
-     ((empty? right)
-      left)
+(define (finger-tree->vector tree)
+  (generator->vector (finger-tree->generator tree)))
 
-     ;; If one operand is single, it suffices to add it to the front
-     ;; or back of the other.
-     ((single? left)
-      (finger-tree-add-front madd mget right (single-x left)))
-     ((single? right)
-      (finger-tree-add-back madd mget left (single-x right)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 4) finger-tree-set (exported)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-     (else
-      ;; Both operands are deep, so we have four digits and two spines
-      ;; that need to merge into two digits and one spine. Presently
-      ;; we have:
-      ;;
-      ;; left-l left-sp left-r      right-l right-sp right-r
-      ;;
-      ;; We will:
-      ;;  1) Reuse left-l as the left digit.
-      ;;  2) Reuse right-r as the right digit.
-      ;;  3) Append left-r (1-4 elements) and right-l (1-4 elements)
-      ;;     into a sequence of 2-8 elements; break them into nodes;
-      ;;     and push the nodes into left-sp.
-      ;;  4) All that's left is left-sp and right-sp; they are finger
-      ;;     trees, so we can append them recursively.
-      ;;
-      ;; The algorithm for (3) is greedy: if exactly 2 or 4 elements
-      ;; remain, build a 2-node; otherwise build a 3-node. Observe
-      ;; that, for any number of elements 2 through 8, this heuristic
-      ;; splits the elements into 2-nodes and 3-nodes with nothing
-      ;; left over.
-      (make-deep (deep-l left)
-		 (delay
-		   (let ((loose (gappend (vector->generator (deep-r left))
-					 (vector->generator (deep-l right)))))
-		     (let loop ((loose-count (+ (digit-length (deep-r left))
-						(digit-length (deep-l right))))
-				(s (force (deep-sp left))))
-		       (case loose-count
-			 ((0)
-			  (recurse node-m s (force (deep-sp right))))
-			 ((2 4)
-			  ;; use let* to guarantee x is bound before y
-			  (let* ((x (loose))
-				 (y (loose)))
-			    (loop (- loose-count 2)
-				  (finger-tree-add-back madd node-m s
-							(make-node2 madd mget x y)))))
-			 (else
-			  (let* ((x (loose))
-				 (y (loose))
-				 (z (loose)))
-			    (loop (- loose-count 3)
-				  (finger-tree-add-back madd node-m s
-							(make-node3 madd mget x y z)))))))))
-		 (deep-r right))))))
+(define-record-type <set-order>
+  (make-set-order-record measure comparator)
+  set-order?
+  (measure set-order-measure)
+  (comparator set-order-comparator))
 
-(define finger-tree-append
-  (case-lambda
-   ((madd mget left right)
-    (append-binary madd mget left right))
-   ((madd mget first . rest)
-    (fold (lambda (right left)
-	    (append-binary madd mget left right))
-	  first
-	  rest))))
+(define (make-set-order get-key comparator)
+  (make-set-order-record (make-measure get-key
+				       (lambda (m1 m2)
+					 m2))
+			 comparator))
 
-(define (finger-tree-scan madd mget mpred mseed tree match absent)
-  (let recurse ((mget mget)
-		(m-prefix mseed)
-		(tree tree)
-		(match (lambda (m-prefix e)
-			 (match e)))
-		(absent (lambda (m-after)
-			  (absent))))
-    (let ((measure (lambda (m-before e)
-		     (madd m-before (mget e)))))
-      (match-tree tree
-        ((empty)
-	 (absent m-prefix))
-	((single x)
-	 (let ((m-x (measure m-prefix x)))
-	   (if (mpred m-x)
-	       (match m-prefix x)
-	       (absent m-x))))
-	((deep l sp r)
-	 (let lloop ((i 0) (m-prefix m-prefix))
-	   (if (< i (digit-length l))
-	       (let* ((e (digit-ref l i))
-		      (m-e (measure m-prefix e)))
-		 (if (mpred m-e)
-		     (match m-prefix e)
-		     (lloop (+ 1 i) m-e)))
-	       (recurse node-m
-			m-prefix
-			(force sp)
-			(lambda (m-prefix node)
-			  (let* ((x (node-x node))
-				 (m-x (measure m-prefix x))
-				 (y (node-y node))
-				 (m-y (measure m-x y)))
-			    (cond
-			     ((mpred m-x)
-			      (match m-prefix x))
-			     ((or (node2? node)
-				  (mpred m-y))
-			      (match m-x y))
-			     (else
-			      (match m-y (node-z node))))))
-			(lambda (m-tree)
-			  (let rloop ((i 0) (m-prefix m-tree))
-			    (if (< i (digit-length r))
-				(let* ((e (digit-ref r i))
-				       (m-e (measure m-prefix e)))
-				  (if (mpred m-e)
-				      (match m-prefix e)
-				      (rloop (+ 1 i) m-e)))
-				(absent m-prefix))))))))))))
+(define (set-order-key order elt)
+  (measure-get (set-order-measure order) elt))
 
-(define (finger-tree-scan/context madd mget mpred mseed tree match absent)
-  (let recurse ((mget mget)
-		(m-prefix mseed)
-		(tree tree)
-		(match (lambda (prefix m-prefix e suffix)
-			 (match prefix e suffix)))
-		(absent (lambda (m-after)
-			  (absent))))
-    (let ((measure (lambda (m-before e)
-		     (madd m-before (mget e)))))
-      (match-tree tree
-        ((empty)
-	 (absent m-prefix))
-	((single x)
-	 (let ((m-x (measure m-prefix x)))
-	   (if (mpred m-x)
-	       (match *empty* m-prefix x *empty*)
-	       (absent m-x))))
-	((deep l sp r)
-	 (let ((ln (digit-length l)))
-	   (let lloop ((i 0) (m-prefix m-prefix))
-	     (if (< i ln)
-		 (let* ((e (digit-ref l i))
-			(m-e (measure m-prefix e))
-			(i+1 (+ 1 i)))
-		   (if (mpred m-e)
-		       (match (digit->finger-tree l 0 i)
-			      m-prefix
-			      e
-			      (deep-drop-left l sp r i+1))
-		       (lloop i+1 m-e)))
-		 (recurse node-m
-			  m-prefix
-			  (force sp)
-			  (lambda (prefix m-prefix node suffix)
-			    (let* ((x (node-x node))
-				   (m-x (measure m-prefix x))
-				   (y (node-y node))
-				   (m-y (measure m-x y)))
-			      (cond
-			       ((mpred m-x)
-				(match (deep-replenish-right l prefix)
-				       m-prefix
-				       x
-				       (make-deep (if (node2? node)
-						      (digit y)
-						      (digit y (node-z node)))
-						  (delay suffix)
-						  r)))
-			       ((node2? node)
-				(match (make-deep l (delay prefix) (digit x))
-				       m-x
-				       y
-				       (deep-replenish-left suffix r)))
-			       ((mpred m-y)
-				(match (make-deep l (delay prefix) (digit x))
-				       m-x
-				       y
-				       (make-deep (digit (node-z node)) (delay suffix) r)))
-			       (else
-				(match (make-deep l (delay prefix) (digit x y))
-				       m-y
-				       (node-z node)
-				       (deep-replenish-left suffix r))))))
-			       (lambda (m-after)
-				 (let ((rn (digit-length r)))
-				   (let rloop ((i 0) (m-prefix m-after))
-				     (if (< i rn)
-					 (let* ((e (digit-ref r i))
-						(m-e (measure m-prefix e))
-						(i+1 (+ 1 i)))
-					   (if (mpred m-e)
-					       (match (deep-drop-right l sp r (- rn i))
-						      m-prefix
-						      e
-						      (digit->finger-tree r i+1 rn))
-					       (rloop i+1 m-e)))
-					 (absent m-prefix))))))))))))))
-
-(define *pseudoset-bottom* (list 'bottom))
-(define (pseudoset-madd l r)
-  r)
-(define (pseudoset-mget e)
-  e)
-(define (make-pseudoset-mpred kcmp kget obj)
-  (lambda (e)
-    (and (not (eq? e *pseudoset-bottom*))
-	 (>=? kcmp (kget e) (kget obj)))))
-
-(define (pseudoset-finger-tree-find kcmp kget tree obj match absent)
-  (finger-tree-scan pseudoset-madd
-		    pseudoset-mget
-		    (make-pseudoset-mpred kcmp kget obj)
-		    *pseudoset-bottom*
+(define (finger-tree-set-search order tree key match absent)
+  (finger-tree-scan (set-order-measure order)
+		    (make-set-pred order key)
+		    *set-mzero*
 		    tree
-		    (lambda (e) ; match
-		      (if (=? kcmp (kget e) (kget obj))
-			  (match e)
+		    (lambda (m elt) ; match
+		      (if (=? (set-order-comparator order)
+			      key
+			      (set-order-key order elt))
+			  (match elt)
 			  (absent)))
-		    absent))
+		    (lambda (m) ; absent
+		      (absent))))
 
-;;; Search for some e in tree whose key is equal to obj's key,
-;;; according to kcmp and kget.
-;;;
-;;; If such an e exists, calls (match e replace remove) where e is the
-;;; matching element, (replace x) returns a tree with x taking the
-;;; place of e, and (remove) returns a tree with e removed.
-;;;
-;;; If no such e exists, calls (absent insert); (insert) returns the
-;;; tree with e included.
-(define (pseudoset-finger-tree-update kcmp kget tree obj match absent)
-  (let ((mpred (make-pseudoset-mpred kcmp kget obj)))
-    (finger-tree-scan/context pseudoset-madd
-			      pseudoset-mget
-			      mpred
-			      *pseudoset-bottom*
-			      tree
-			      (lambda (pre e suf) ; match
-				(if (=? kcmp (kget e) (kget obj))
-				    (match e
-					   ;; replace
-					   (lambda (x)
-					     (finger-tree-append pseudoset-madd
-								 pseudoset-mget
-								 pre
-								 (make-single x)
-								 suf))
-					   ;; remove
-					   (cute finger-tree-append
-						 pseudoset-madd
-						 pseudoset-mget
-						 pre
-						 suf))
-				    (absent (cut finger-tree-append ; insert
-						 pseudoset-madd
-						 pseudoset-mget
-						 pre
-						 (make-double obj e)
-						 suf))))
-			      (lambda () ; absent
-				(absent (cute finger-tree-add-back ; insert
-					      pseudoset-madd
-					      pseudoset-mget
-					      tree
-					      obj))))))
+;; Multipurpose insert, remove, or replace.
+;;
+;; If tree contains an element x that is =? to elt, calls
+;;   (match x remove replace)
+;; where
+;;  - x is that matching element
+;;  - (remove) returns a copy of tree with elt excluded
+;;  - (replace new-x) returns a copy of tree with new-x in place of
+;;    x. new-x must be =? to elt to preserve sorted order.
+;;
+;; Otherwise (no such x), calls
+;;   (absent insert)
+;; where
+;;  - (insert new-x) returns a copy of tree with new-x included.
+;;    new-x must be =? to elt to preserve sorted order.
+;;
+;; O(log n) time. The include, remove, and replace procedures also
+;; take O(log n) time each.
+(define (finger-tree-set-update order tree elt match absent)
+  (let ((meas (set-order-measure order)))
+    (finger-tree-bisect
+     meas
+     (make-set-pred order (set-order-key order elt))
+     *set-mzero*
+     tree
+     (lambda (m pre suf) ; match
+       (let ((x (finger-tree-left suf))
+	     (suf-except-x (finger-tree-remove-left suf)))
+	 (if (=? (set-order-comparator order)
+		 (set-order-key order elt)
+		 (set-order-key order x))
+	     (match x
+		    (lambda () ; remove
+		      (append-binary meas
+				     pre
+				     suf-except-x))
+		    (lambda (new-x) ; replace
+		      (append-binary meas
+				     (finger-tree-add-right meas pre new-x)
+				     suf-except-x)))
+	     (absent ; match is >, not =
+	      (lambda (new-x) ; insert
+		(append-binary meas
+			       (finger-tree-add-right meas pre new-x)
+			       suf))))))
+     (lambda (m) ; absent, elt must be > entire tree
+       (absent
+	(lambda (first-x) ; insert
+	  (finger-tree-add-right meas tree first-x)))))))
 
-(define-syntax define-subset-pred
-  (syntax-rules ()
-    ((define-subset-pred (IDENTIFIER KCMP KGET LEFT RIGHT)
-       BODY)
-     (define (IDENTIFIER KCMP KGET set1 set2 . rest)
-       (let ((binary-pred (lambda (LEFT RIGHT)
-			    BODY)))
-	 (and (binary-pred set1 set2)
-	      (call/cc
-	       (lambda (return)
-		 (fold (lambda (right left)
-			 (unless (binary-pred left right)
-				 (return #false)))
-		       set2
-		       rest)
-		 (return #true)))))))))
+;; Include elt; if tree already contains an element =? to elt, leave
+;; the original element.
+(define (finger-tree-set-adjoin order tree elt)
+  (finger-tree-set-update order
+			  tree
+			  elt
+			  (lambda (x remove replace)
+			    tree)
+			  (lambda (insert)
+			    (insert elt))))
 
-(define-subset-pred (pseudoset-finger-tree=? kcmp kget left right)
-  (let loop ((left left) (right right))
-    (cond
-     ((empty? left)
-      (empty? right))
-     ((empty? right)
-      #false)
-     (else
-      (if (=? kcmp
-	      (kget (finger-tree-front left))
-	      (kget (finger-tree-front right)))
-	  (loop (finger-tree-remove-front left)
-		(finger-tree-remove-front right))
-	  #false)))))
+;; Include elt; if tree already contains an element =? to elt, it is
+;; replaced with elt.
+(define (finger-tree-set-replace order tree elt)
+  (finger-tree-set-update order
+			  tree
+			  elt
+			  (lambda (x remove replace)
+			    (replace elt))
+			  (lambda (insert)
+			    (insert elt))))
 
-(define-subset-pred (pseudoset-finger-tree<=? kcmp kget left right)
-  (let loop ((left left) (right right))
-    (cond
-     ((empty? left)
-      #true)
-     ((empty? right)
-      #false)
-     (else
-      (comparator-if<=> kcmp
-                        (kget (finger-tree-front left))
-                        (kget (finger-tree-front right))
-	   #false
-	   (loop (finger-tree-remove-front left)
-		 (finger-tree-remove-front right))
-	   (loop left
-		 (finger-tree-remove-front right)))))))
+;; Include elt; if tree already contains an element =? to elt, it is
+;; replaced with elt.
+(define (finger-tree-set-delete order tree elt)
+  (finger-tree-set-update order
+			  tree
+			  elt
+			  (lambda (x remove replace)
+			    (remove))
+			  (lambda (insert)
+			    tree)))
 
-(define-subset-pred (pseudoset-finger-tree<? kcmp kget left right)
-  (let loop ((left left) (right right) (right-has-something-extra #false))
-    (cond
-     ((empty? left)
-      (or (not (empty? right))
-	  right-has-something-extra))
-     ((empty? right)
-      #false)
-     (else
-      (comparator-if<=> kcmp
-                        (kget (finger-tree-front left))
-                        (kget (finger-tree-front right))
-	   #false
-	   (loop (finger-tree-remove-front left)
-		 (finger-tree-remove-front right)
-		 right-has-something-extra)
-	   (loop left
-		 (finger-tree-remove-front right)
-		 #true))))))
+;; Predecessor query: return the greatest of the elements whose key is
+;; <? key. Calls (match pred) if one exists, or (absent) otherwise
+;; (i.e. when tree is empty, or key is <=? all elements of tree).
+(define (finger-tree-set-predecessor order tree key match absent)
+  (finger-tree-bisect (set-order-measure order)
+		      (make-set-pred order key)
+		      *set-mzero*
+		      tree
+		      (lambda (m pre suf)
+			(if (finger-tree-empty? pre)
+			    (absent)
+			    (match (finger-tree-right pre))))
+		      (lambda (m)
+			(if (finger-tree-empty? tree)
+			    (absent)
+			    (match (finger-tree-right tree))))))
 
-(define (pseudoset-finger-tree>? kcmp kget . trees)
-  (apply pseudoset-finger-tree<? kcmp kget (reverse! trees)))
+;; Successor query: return the least of the elements whose key is >?
+;; key. Calls (match pred) if one exists, or (absent) otherwise
+;; (i.e. when tree is empty, or key is >=? all elements of tree).
+(define (finger-tree-set-successor order tree key match absent)
+  (finger-tree-bisect (set-order-measure order)
+		      (make-set-pred order key)
+		      *set-mzero*
+		      tree
+		      (lambda (m pre suf) ; match
+			;; suf >= key; need to find a stricly > element in suf
+			(let ((x (finger-tree-left suf)))
+			  (if (>? (set-order-comparator order)
+				  (set-order-key order x)
+				  key)
+			      ;; x > key, done
+			      (match x)
+			      
+			      ;; otherwise use the element after x, if it exists
+			      (let ((after-x (finger-tree-remove-left suf)))
+				(if (finger-tree-empty? after-x)
+				    (absent)
+				    (match (finger-tree-left after-x)))))))
+		      (lambda (m)
+			(absent))))
 
-(define (pseudoset-finger-tree>=? kcmp kget . trees)
-  (apply pseudoset-finger-tree<=? kcmp kget (reverse! trees)))
+(define finger-tree-set<?  (binary-relation->variadic set<?-binary ))
+(define finger-tree-set<=? (binary-relation->variadic set<=?-binary))
+(define finger-tree-set=?  (binary-relation->variadic set=?-binary ))
 
-(define (pseudoset-binary-operation keep-distinct-left keep-distinct-right
-				    merge-common
-				    kcmp kget
-				    left right)
-  (let ((append (cute finger-tree-append pseudoset-madd pseudoset-mget <> <>))
-	(add-back (cute finger-tree-add-back pseudoset-madd pseudoset-mget <> <>)))
-    (let loop ((left left)
-	       (right right)
-	       (result *empty*))
-      (cond
-       ((empty? left)
-	(if keep-distinct-right
-	    (append result right)
-	    result))
-       ((empty? right)
-	(if keep-distinct-left
-	    (append result left)
-	    result))
-       (else
-	(let ((l (finger-tree-front left))
-	      (r (finger-tree-front right)))
-	  (comparator-if<=> kcmp (kget l) (kget r)
-	       (loop (finger-tree-remove-front left)
-		     right
-		     (if keep-distinct-left
-			 (add-back result l)
-			 result))
-	       (loop (finger-tree-remove-front left)
-		     (finger-tree-remove-front right)
-		     (if merge-common
-			 (add-back result (merge-common l r))
-			 result))
-	       (loop left
-		     (finger-tree-remove-front right)
-		     (if keep-distinct-right
-			 (add-back result r)
-			 result)))))))))
+(define (finger-tree-set>=? order . sets)
+  (apply finger-tree-set<=? order (reverse sets)))
 
-(define (pseudoset-finger-tree-union merge-common kcmp kget first . rest)
-  (fold (lambda (right left)
-	  (pseudoset-binary-operation #true #true merge-common kcmp kget left right))
-	first
-	rest))
+(define (finger-tree-set>? order . sets)
+  (apply finger-tree-set<? order (reverse sets)))
 
-(define (pseudoset-finger-tree-intersection merge-common kcmp kget first . rest)
-  (fold (lambda (right left)
-	  (pseudoset-binary-operation #false #false merge-common kcmp kget left right))
-	first
-	rest))
+(define finger-tree-set-difference (binary-operation->variadic set-difference-binary))
 
-(define (pseudoset-finger-tree-difference kcmp kget first . rest)
-  (fold (lambda (right left)
-	  (pseudoset-binary-operation #true #false #false kcmp kget left right))
-	first
-	rest))
+(define finger-tree-set-intersect (binary-operation->variadic/reduce set-intersect-binary))
 
-(define (pseudoset-finger-tree-xor kcmp kget left right)
-  (pseudoset-binary-operation #true #true #false kcmp kget left right))
+(define finger-tree-set-union (binary-operation->variadic/reduce set-union-binary))
 
-(define (increasing-generator->pseudoset-finger-tree gen)
-  (generator->finger-tree pseudoset-madd pseudoset-mget gen))
+(define finger-tree-set-xor (binary-operation->variadic set-xor-binary))
+
+(define (increasing-generator->finger-tree-set order gen)
+  (generator->finger-tree (set-order-measure order) gen))
+
+(define (increasing-list->finger-tree-set order lst)
+  (list->finger-tree (set-order-measure order) lst))
+
+(define (increasing-vector->finger-tree-set order vect)
+  (vector->finger-tree (set-order-measure order) vect))
+
+(define (generator->finger-tree-set order reduce gen)
+  (generator-fold (lambda (elt tree)
+		    (finger-tree-set-update order
+					    tree
+					    elt
+					    (lambda (x remove replace)
+					      (replace (reduce x elt)))
+					    (lambda (insert)
+					      (insert elt))))
+		  *empty*
+		  gen))
+
+(define (list->finger-tree-set order reduce lst)
+  (generator->finger-tree-set order reduce (list->generator lst)))
+
+(define (vector->finger-tree-set order reduce vect)
+  (generator->finger-tree-set order reduce (vector->generator vect)))

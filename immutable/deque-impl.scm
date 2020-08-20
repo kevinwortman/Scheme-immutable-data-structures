@@ -1,5 +1,5 @@
 ;;;; missing from the SRFI 121 reference implementation
-
+#|
 (define (list->generator list)
   (let ((list list))
     (lambda ()
@@ -8,12 +8,14 @@
 	  (let ((obj (car list)))
 	    (set! list (cdr list))
 	    obj)))))
-
+|#
 ;;;;
 
-(define madd +)
-(define (mget obj) 1)
-(define mseed 0)
+(define *deque-measure*
+  (make-measure (lambda (elt) 1)
+		+))
+
+(define *mzero* 0)
 
 (define-record-type <ideque>
   (make-ideque length tree)
